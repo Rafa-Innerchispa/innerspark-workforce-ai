@@ -1,0 +1,20 @@
+substitutions:
+  _REGION: us-central1
+  _SERVICE: innerspark-device-gateway
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -t, $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/device-gateway:$COMMIT_SHA, services/device-gateway]
+  - name: gcr.io/cloud-builders/docker
+    args: [push, $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/device-gateway:$COMMIT_SHA]
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=$LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/device-gateway:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+images:
+  - $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/device-gateway:$COMMIT_SHA
