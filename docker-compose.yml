@@ -1,0 +1,25 @@
+services:
+  api:
+    build: ./services/device-gateway
+    environment:
+      DATABASE_URL: postgresql://innerspark:innerspark@db:5432/innerspark
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: innerspark
+      POSTGRES_PASSWORD: innerspark
+      POSTGRES_DB: innerspark
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U innerspark"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+volumes:
+  postgres_data:
