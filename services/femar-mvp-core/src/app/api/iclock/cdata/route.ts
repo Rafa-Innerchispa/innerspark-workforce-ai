@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const url = new URL(req.url);
     const sn = url.searchParams.get('SN') || 'UNKNOWN_DEVICE';
     
-    // Parse ADMS log format: UID \t ID \t Timestamp \t State \t Type ...
+    // Parse ADMS log format: User ID \t Date/Time \t State \t Verify Type \t WorkCode \t ...
     const lines = rawData.split('\n').filter(line => line.trim() !== '');
     
     const batch = db.batch();
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     for (const line of lines) {
       const parts = line.split('\t');
-      if (parts.length >= 3) {
+      if (parts.length >= 2) {
         const docRef = admsLogsRef.doc();
         batch.set(docRef, {
           serial_number: sn,
