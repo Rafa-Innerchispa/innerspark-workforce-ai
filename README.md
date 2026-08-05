@@ -11,6 +11,8 @@ Plataforma de asistencia y pre-nómina para FEMAR, creada para el hackathon Nati
 - Pre-nómina explicable: horas ordinarias, extras 50 %/100 %, recargos y descuentos trazables.
 - Integraciones patrocinadoras: Native.Builder, AI/ML API, Speechmatics y Bright Data.
 - Despliegue reproducible en Google Cloud Run.
+- Barreras de costo reproducibles: escalado a cero, máximo de dos instancias y
+  recursos limitados por servicio. Ver `docs/GCP_COST_GUARDRAILS.md`.
 
 > El proyecto usa datos ficticios para la demostración. Las reglas laborales y de nómina deben validarse con FEMAR antes de producción.
 
