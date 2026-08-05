@@ -5,6 +5,9 @@ import { processCheckinNovelty } from '@/lib/noveltyService';
 export async function POST(req: NextRequest) {
   try {
     const rawData = await req.text();
+    if (!rawData || rawData.trim() === '') {
+      return new NextResponse('BAD REQUEST', { status: 400, headers: { 'Content-Type': 'text/plain' } });
+    }
     const url = new URL(req.url);
     const sn = url.searchParams.get('SN') || 'UNKNOWN_DEVICE';
     
