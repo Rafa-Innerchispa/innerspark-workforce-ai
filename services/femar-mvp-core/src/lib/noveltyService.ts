@@ -26,9 +26,22 @@ export async function processCheckinNovelty(userId: string, timestampStr: string
     dateObj = new Date(timestampStr.replace(' ', 'T') + 'Z');
   }
 
-  // Very basic timezone handling: assuming UTC or server local for MVP
-  const hours = dateObj.getHours();
-  const minutes = dateObj.getMinutes();
+  // Convert to America/Guayaquil timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Guayaquil',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(dateObj);
+  const hourPart = parts.find(p => p.type === 'hour')?.value || '0';
+  const minutePart = parts.find(p => p.type === 'minute')?.value || '0';
+  
+  // Handle 24h format mapping (Intl can sometimes return '24' instead of '0')
+  const rawHours = parseInt(hourPart, 10);
+  const hours = rawHours === 24 ? 0 : rawHours;
+  const minutes = parseInt(minutePart, 10);
   
   const timeInMinutes = hours * 60 + minutes;
   

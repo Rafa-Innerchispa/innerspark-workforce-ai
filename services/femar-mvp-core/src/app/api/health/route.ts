@@ -47,6 +47,6 @@ export async function GET() {
       },
       error_message: error.message || 'Unknown error',
       timestamp: new Date().toISOString()
-    }, { status: 500 });
+    }, { status: 200 });
   }
 }

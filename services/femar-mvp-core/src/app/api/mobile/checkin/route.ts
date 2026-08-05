@@ -30,14 +30,14 @@ export async function POST(req: NextRequest) {
       metadata: { contentType: 'image/jpeg' }
     });
 
-    // Make the file publicly readable (optional, or we can use signed URLs later)
-    // await file.makePublic();
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
+    // Keep the object private in GCS and only save the internal reference.
+    // The frontend or client will request a signed URL when they need to view it.
+    const privatePath = `gs://${bucketName}/${filename}`;
 
     const logRef = db.collection('mobile_logs').doc();
     await logRef.set({
       location: { lat, lng },
-      photo_url: publicUrl,
+      photo_url: privatePath,
       timestamp: timestamp || new Date().toISOString(),
       created_at: new Date().toISOString()
     });
