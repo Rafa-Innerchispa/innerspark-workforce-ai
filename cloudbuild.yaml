@@ -2,6 +2,10 @@ substitutions:
   _REGION: us-central1
   _WEB_SERVICE: innerspark-workforce-web
   _API_SERVICE: innerspark-device-gateway
+  # Guardrails de costo. Mantener estos valores bajos para el piloto FEMAR.
+  _MAX_INSTANCES: '2'
+  _CPU: '1'
+  _MEMORY: 512Mi
 steps:
   - name: gcr.io/cloud-builders/docker
     args: [build, -t, $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/web:$COMMIT_SHA, .]
@@ -9,7 +13,20 @@ steps:
     args: [push, $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/web:$COMMIT_SHA]
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
-    args: [run, deploy, ${_WEB_SERVICE}, --image=$LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/web:$COMMIT_SHA, --region=${_REGION}, --platform=managed, --allow-unauthenticated]
+    args:
+      - run
+      - deploy
+      - ${_WEB_SERVICE}
+      - --image=$LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/web:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=${_MAX_INSTANCES}
+      - --cpu=${_CPU}
+      - --memory=${_MEMORY}
+      - --concurrency=80
+      - --cpu-throttling
   - name: gcr.io/cloud-builders/docker
     args: [build, -t, $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/device-gateway:$COMMIT_SHA, services/device-gateway]
   - name: gcr.io/cloud-builders/docker
@@ -24,6 +41,13 @@ steps:
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=${_MAX_INSTANCES}
+      - --cpu=${_CPU}
+      - --memory=${_MEMORY}
+      - --concurrency=80
+      - --timeout=60
+      - --cpu-throttling
 images:
   - $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/web:$COMMIT_SHA
   - $LOCATION-docker.pkg.dev/$PROJECT_ID/innerspark/device-gateway:$COMMIT_SHA
