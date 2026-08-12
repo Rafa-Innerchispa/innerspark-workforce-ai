@@ -74,7 +74,7 @@ export default function MobileCheckin() {
   };
 
   return (
-    <main style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
+    <main style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
       <h1 style={{ color: '#333' }}>FEMAR Mobile Check-in</h1>
       <p style={{ fontWeight: 'bold' }}>Status: {status}</p>
       
@@ -96,6 +96,21 @@ export default function MobileCheckin() {
           </div>
         </div>
       )}
+
+      <div style={{ marginTop: '3rem', padding: '1.5rem', backgroundColor: '#f8f9fa', borderRadius: '12px', border: '1px solid #e5e7eb', textAlign: 'left' }}>
+        <h3 style={{ color: '#1f2937', marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          🛡️ Protocolo de Seguridad Georeferenciada
+        </h3>
+        <p style={{ fontSize: '0.9rem', color: '#4b5563', lineHeight: '1.5' }}>
+          Esta APK cuenta con validación de 3 capas para evitar fraudes en la asistencia remota:
+        </p>
+        <ul style={{ fontSize: '0.85rem', color: '#374151', paddingLeft: '20px', lineHeight: '1.6' }}>
+          <li><strong>Anti Fake-GPS:</strong> El sistema lee variables nativas del sistema operativo Android/iOS e impide la marcación si se detectan "Ubicaciones Simuladas" habilitadas en las opciones de desarrollador.</li>
+          <li><strong>Geofencing:</strong> Si el GPS nativo ubica al dispositivo fuera de la "zona segura" asignada, no se activará el botón de Check-in.</li>
+          <li><strong>Liveness Biométrico:</strong> Es obligatorio el uso exclusivo de la cámara en vivo del dispositivo. Se bloquea a nivel de permisos el cargar imágenes desde la galería.</li>
+          <li><strong>Sincronización NTP:</strong> La hora se captura del servidor encriptado, no de la hora del sistema operativo del celular, evitando el "Time Tampering".</li>
+        </ul>
+      </div>
     </main>
   );
 }
