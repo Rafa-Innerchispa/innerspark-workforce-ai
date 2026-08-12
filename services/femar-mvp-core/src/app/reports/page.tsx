@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
 function ReportsContent() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { activeCompanyId } = useAuth();
 
-  const companyEmployees = mockEmployees.filter(e => e.companyId === user?.companyId);
+  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
 
   const [reportType, setReportType] = useState("nomina"); // nomina, faltas, atrasos, consolidado
   const [selectedEmployee, setSelectedEmployee] = useState("all");

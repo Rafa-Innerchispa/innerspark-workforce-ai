@@ -6,9 +6,9 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function PrePayrollPage() {
   const [filter, setFilter] = useState('ALL');
-  const { user } = useAuth();
+  const { activeCompanyId } = useAuth();
   
-  const companyEmployees = mockEmployees.filter(e => e.companyId === user?.companyId);
+  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
 
   // Generate mock novelties for company employees
   const novelties = companyEmployees.flatMap((emp, i) => {

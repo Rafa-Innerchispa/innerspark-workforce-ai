@@ -10,9 +10,9 @@ import Link from "next/link";
 
 export default function DevicesPage() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { activeCompanyId } = useAuth();
   
-  const companyEmployees = mockEmployees.filter(e => e.companyId === user?.companyId);
+  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
   const [pendingDevices, setPendingDevices] = useState<any[]>([]);
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
   const [realtimeLogs, setRealtimeLogs] = useState<any[]>([]);

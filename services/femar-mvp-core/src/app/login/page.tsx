@@ -7,6 +7,7 @@ import { Fingerprint, LogIn, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const [cedula, setCedula] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, user, isLoading } = useAuth();
   const router = useRouter();
@@ -25,25 +26,24 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     
-    if (!cedula.trim()) {
-      setError('Por favor ingresa tu número de cédula');
+    if (!cedula.trim() || !password) {
+      setError('Por favor ingresa tu número de cédula y contraseña');
       return;
     }
 
-    const success = login(cedula.trim());
-    if (success) {
-      // The useEffect will handle the redirect
-    } else {
-      setError('Credenciales inválidas. Verifica tu cédula o contacta a RRHH.');
-    }
+    login(cedula.trim(), password).then((success) => {
+      if (!success) {
+        setError('Credenciales inválidas o cuenta inactiva. Verifica tus datos.');
+      }
+    });
   };
 
   if (isLoading || user) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>;
+    return <div className="min-h-[100dvh] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative">
+    <div className="min-h-[100dvh] w-full flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Effects */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] -z-10 animate-pulse-slow"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] -z-10 animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
@@ -57,7 +57,7 @@ export default function LoginPage() {
             <Fingerprint className="w-8 h-8 text-blue-400" />
           </div>
           <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-2">
-            FEMAR AI
+            Workforce AI
           </h1>
           <p className="text-zinc-400 text-sm">
             Sistema Inteligente de Gestión de Fuerza Laboral
@@ -80,9 +80,22 @@ export default function LoginPage() {
                 autoComplete="off"
               />
             </div>
-            <p className="text-xs text-zinc-500 mt-2">
-              * Administradores: ingresen 'admin' o su cédula registrada.
-            </p>
+          </div>
+          
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-2">
+              Contraseña
+            </label>
+            <div className="relative group">
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all group-hover:border-zinc-600"
+                placeholder="Ingresa tu contraseña"
+              />
+            </div>
           </div>
 
           {error && (
@@ -99,10 +112,17 @@ export default function LoginPage() {
             <LogIn className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             <span>Ingresar al Sistema</span>
           </button>
+          
+          <div className="text-center mt-4">
+            <span className="text-sm text-zinc-400">¿No tienes cuenta? </span>
+            <a href="/register" className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors">
+              Regístrate aquí
+            </a>
+          </div>
         </form>
 
         <div className="mt-8 text-center text-xs text-zinc-500">
-          <p>&copy; {new Date().getFullYear()} FEMAR S.A. Todos los derechos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} Workforce AI. Todos los derechos reservados.</p>
         </div>
       </div>
     </div>

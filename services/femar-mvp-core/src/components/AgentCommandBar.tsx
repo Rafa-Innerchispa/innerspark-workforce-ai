@@ -15,9 +15,9 @@ interface AgentCommandBarProps {
 
 export default function AgentCommandBar({ onCommand, isProcessing }: AgentCommandBarProps) {
   const { t, language } = useI18n();
-  const { user } = useAuth();
+  const { activeCompanyId } = useAuth();
   
-  const companyEmployees = mockEmployees.filter(e => e.companyId === user?.companyId);
+  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
   const [command, setCommand] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [messages, setMessages] = useState<{ id: string; role: "user" | "agent"; text: string }[]>([]);

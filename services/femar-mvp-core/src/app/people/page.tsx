@@ -9,9 +9,9 @@ import { mockEmployees } from "@/lib/mockData";
 
 export default function PeoplePage() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { activeCompanyId } = useAuth();
 
-  const [employees, setEmployees] = useState<any[]>(mockEmployees.filter(e => e.companyId === user?.companyId));
+  const [employees, setEmployees] = useState<any[]>(mockEmployees.filter(e => e.companyId === activeCompanyId));
   const [loadingEmployees, setLoadingEmployees] = useState(true);
 
   React.useEffect(() => {

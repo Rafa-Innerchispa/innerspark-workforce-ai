@@ -11,12 +11,12 @@ import { AlertCircle, Clock, CheckCircle2, TrendingUp, MonitorSmartphone, FileSp
 
 export default function Home() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { activeCompanyId } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
 
   // Multi-tenant filter
-  const companyEmployees = mockEmployees.filter(e => e.companyId === user?.companyId);
+  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
 
   React.useEffect(() => {
     const fetchDevices = async () => {
