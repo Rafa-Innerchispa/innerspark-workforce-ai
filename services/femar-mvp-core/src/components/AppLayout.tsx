@@ -11,16 +11,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const isLoginPage = pathname === '/login';
+  const isRegisterPage = pathname === '/register';
+  const isModuleSelection = pathname === '/modules';
+  const isTagsPage = pathname === '/tags';
+  const isFullPage = isLoginPage || isRegisterPage || isModuleSelection || isTagsPage;
 
   useEffect(() => {
     if (!isLoading) {
-      if (!user && !isLoginPage) {
+      if (!user && !isLoginPage && !isRegisterPage) {
         // Redirect unauthenticated users to login
         router.push('/login');
-      } else if (user && isLoginPage) {
+      } else if (user && (isLoginPage || isRegisterPage)) {
         // Redirect authenticated users away from login
-        if (user.role === 'admin') {
-          router.push('/');
+        if (user.role === 'admin' || user.role === 'superadmin') {
+          router.push('/modules');
         } else {
           router.push('/mobile');
         }
@@ -39,8 +43,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If we are on login, don't show sidebar
-  if (isLoginPage) {
+  // If we are on full pages, don't show sidebar
+  if (isFullPage) {
     return <>{children}</>;
   }
 

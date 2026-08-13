@@ -10,6 +10,7 @@ interface AuthUser {
   name: string;
   role: Role | 'superadmin';
   companyId: string;
+  modules?: string[];
 }
 
 interface AuthContextType {
