@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import GlassWidget from "@/components/GlassWidget";
-import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, User, Clock, AlertTriangle } from "lucide-react";
+import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, User, Clock, AlertTriangle, MapPin } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { mockEmployees } from "@/lib/mockData";
@@ -10,6 +10,26 @@ import { generatePayrollReport, getDeterministicRandom } from "@/lib/reportUtils
 import * as XLSX from "xlsx";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+
+const LocationAddress = ({ lat, lng }: { lat: number; lng: number }) => {
+  const [address, setAddress] = useState<string>("Cargando ubicación...");
+  
+  React.useEffect(() => {
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.display_name) {
+          const parts = data.display_name.split(", ");
+          setAddress(parts.slice(0, 3).join(", "));
+        } else {
+          setAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        }
+      })
+      .catch(() => setAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`));
+  }, [lat, lng]);
+
+  return <span className="text-zinc-300 block text-xs mb-1 truncate max-w-[250px]" title={address}>{address}</span>;
+};
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +49,23 @@ function ReportsContent() {
   // Custom Combobox state
   const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
+
+  const [mobileLogs, setMobileLogs] = useState<any[]>([]);
+  const [loadingMobileLogs, setLoadingMobileLogs] = useState(false);
+
+  React.useEffect(() => {
+    if (reportType === 'mobile_checkins') {
+      setLoadingMobileLogs(true);
+      fetch('/api/mobile/logs')
+        .then(res => res.json())
+        .then(data => {
+          if (data.logs) {
+            setMobileLogs(data.logs);
+          }
+        })
+        .finally(() => setLoadingMobileLogs(false));
+    }
+  }, [reportType]);
 
   React.useEffect(() => {
     if (searchParams?.get("download") === "pdf") {
@@ -145,6 +182,7 @@ function ReportsContent() {
               <option value="faltas">Reporte de Faltas (Ausentismo)</option>
               <option value="atrasos">Reporte de Atrasos (Minutos tarde)</option>
               <option value="consolidado">Consolidado General por Persona</option>
+              <option value="mobile_checkins">Marcaciones Móviles (GPS y Fotos)</option>
             </select>
           </div>
           <div>
@@ -282,6 +320,14 @@ function ReportsContent() {
                     <th className="px-6 py-4 font-medium">Estado / Novedades</th>
                   </>
                 )}
+                {reportType === "mobile_checkins" && (
+                  <>
+                    <th className="px-6 py-4 font-medium">Empleado (ID)</th>
+                    <th className="px-6 py-4 font-medium">Fecha y Hora</th>
+                    <th className="px-6 py-4 font-medium">Ubicación GPS</th>
+                    <th className="px-6 py-4 font-medium">Foto (Liveness)</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
@@ -338,6 +384,46 @@ function ReportsContent() {
                     )}
                   </tr>
                 ))
+              )}
+              {reportType === "mobile_checkins" && (
+                loadingMobileLogs ? (
+                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">Cargando marcaciones y resolviendo imágenes seguras...</td></tr>
+                ) : mobileLogs.length === 0 ? (
+                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">No hay marcaciones móviles registradas aún.</td></tr>
+                ) : (
+                  mobileLogs.map((log: any, i) => {
+                    const date = new Date(log.timestamp).toLocaleString('es-EC');
+                    const mapLink = `https://www.google.com/maps?q=${log.location.lat},${log.location.lng}`;
+                    const userId = log.user_id === "mobile-user" ? "3333333333" : log.user_id;
+                    const employee = companyEmployees.find(e => e.id === userId);
+                    const employeeName = employee ? employee.name : (userId === "3333333333" ? "Empleado Prueba" : "Desconocido");
+
+                    return (
+                      <tr key={i} className="hover:bg-zinc-800/40 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="font-medium text-zinc-200 block">{employeeName}</span>
+                          <span className="text-xs text-zinc-500 font-normal">C.I. {userId}</span>
+                        </td>
+                        <td className="px-6 py-4 text-zinc-300">{date}</td>
+                        <td className="px-6 py-4">
+                          <LocationAddress lat={log.location.lat} lng={log.location.lng} />
+                          <a href={mapLink} target="_blank" rel="noreferrer" className="text-blue-400 text-xs hover:underline flex items-center gap-1 mt-1">
+                            <MapPin className="w-3 h-3" /> Ver en Google Maps
+                          </a>
+                        </td>
+                        <td className="px-6 py-4">
+                          {log.photo_url ? (
+                            <a href={log.photo_url} target="_blank" rel="noreferrer">
+                              <img src={log.photo_url} alt="Checkin" className="w-12 h-12 rounded-lg object-cover border border-zinc-700 hover:border-blue-500 transition-colors" />
+                            </a>
+                          ) : (
+                            <span className="text-zinc-500">Sin foto</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )
               )}
               {reportType === "nomina" && totalsNomina && reportData.length > 0 && (
                 <tr className="bg-zinc-800/80 border-t border-zinc-700">

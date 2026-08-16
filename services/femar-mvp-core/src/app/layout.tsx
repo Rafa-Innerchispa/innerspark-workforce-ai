@@ -5,8 +5,8 @@ import AppLayout from "@/components/AppLayout";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FEMAR AI - Command Center",
-  description: "Plataforma inteligente de gestión de fuerza laboral",
+  title: "InnerSpark Workforce AI",
+  description: "Plataforma Inteligente de Gestión de Personal",
 };
 
 export default function RootLayout({

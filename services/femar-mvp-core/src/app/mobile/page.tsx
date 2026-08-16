@@ -1,7 +1,9 @@
 'use client';
 import { useState, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MobileCheckin() {
+  const { user } = useAuth();
   const [status, setStatus] = useState('Idle');
   const [photo, setPhoto] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -49,6 +51,7 @@ export default function MobileCheckin() {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
         photo: photo,
+        user_id: user?.id || 'unknown',
         timestamp: new Date().toISOString()
       };
 

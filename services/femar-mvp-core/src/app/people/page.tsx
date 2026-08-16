@@ -11,7 +11,11 @@ export default function PeoplePage() {
   const { t } = useI18n();
   const { activeCompanyId } = useAuth();
 
-  const [employees, setEmployees] = useState<any[]>(mockEmployees.filter(e => e.companyId === activeCompanyId));
+  const [employees, setEmployees] = useState<any[]>(
+    activeCompanyId === 'femar' 
+      ? mockEmployees.filter(e => e.companyId === activeCompanyId) 
+      : []
+  );
   const [loadingEmployees, setLoadingEmployees] = useState(true);
 
   React.useEffect(() => {

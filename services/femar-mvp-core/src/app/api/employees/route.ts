@@ -49,9 +49,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const snapshot = await db.collection('employees').orderBy('updatedAt', 'desc').get();
+    const url = new URL(req.url);
+    const companyId = url.searchParams.get('companyId');
+    let query: FirebaseFirestore.Query = db.collection('employees');
+    
+    if (companyId) {
+      query = query.where('companyId', '==', companyId);
+    }
+    
+    const snapshot = await query.get();
     const employees = snapshot.docs.map(doc => ({ ...doc.data() }));
     return NextResponse.json({ employees });
   } catch (error) {
