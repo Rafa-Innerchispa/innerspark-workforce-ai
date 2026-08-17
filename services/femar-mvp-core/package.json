@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "jest"
+    "test": "jest --config jest.config.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
