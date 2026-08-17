@@ -15,7 +15,8 @@ export async function POST(req: Request) {
       '0914832423': { id: '0914832423', cedula: '0914832423', name: 'Super Administrador (Rafa)', role: 'superadmin', companyId: 'femar', status: 'APPROVED' },
       '0950626317': { id: '0950626317', cedula: '0950626317', name: 'Andrés Ramos', role: 'admin', companyId: 'iapro', status: 'APPROVED' },
       '1111111111': { id: '1111111111', cedula: '1111111111', name: 'Admin FEMAR', role: 'admin', companyId: 'femar', status: 'APPROVED' },
-      '2222222222': { id: '2222222222', cedula: '2222222222', name: 'Admin PC Doctor', role: 'admin', companyId: 'pcdoctor', status: 'APPROVED' }
+      '2222222222': { id: '2222222222', cedula: '2222222222', name: 'Admin PC Doctor', role: 'admin', companyId: 'pcdoctor', status: 'APPROVED' },
+      'DEVPOST-JUDGE': { id: 'DEVPOST-JUDGE', cedula: 'DEVPOST-JUDGE', name: 'XPRIZE Judge Admin', role: 'admin', companyId: 'innerspark_labs', status: 'APPROVED' }
     };
 
     const docRef = db.collection('users').doc(cedula);
