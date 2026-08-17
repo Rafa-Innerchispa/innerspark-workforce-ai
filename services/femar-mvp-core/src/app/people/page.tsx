@@ -208,7 +208,8 @@ export default function PeoplePage() {
   };
 
   const departmentsMap = employees.reduce((acc, emp) => {
-    acc[emp.department] = (acc[emp.department] || 0) + 1;
+    const dept = emp.department || "Sin Asignar";
+    acc[dept] = (acc[dept] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -235,7 +236,7 @@ export default function PeoplePage() {
         {Object.entries(departmentsMap).map(([dept, count]) => (
           <GlassWidget key={dept} title={`${dept} (${count} empleados)`} icon={Users}>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-4">
-              {employees.filter(e => e.department === dept).map((employee) => (
+              {employees.filter(e => (e.department || "Sin Asignar") === dept).map((employee) => (
                 <div key={employee.id} className="relative overflow-hidden group border border-zinc-700/50 bg-zinc-800/30 rounded-2xl p-5 hover:border-blue-500/50 hover:bg-zinc-800/50 transition-all flex flex-col h-full">
                   <div className="absolute top-4 right-4 flex gap-2">
                     <button 

@@ -47,8 +47,14 @@ export async function POST(req: Request) {
 
     const getEmployeesDeclaration: FunctionDeclaration = {
       name: 'get_employees',
-      description: 'Obtiene un resumen de la lista de empleados de la empresa',
-      parameters: { type: Type.OBJECT, properties: {} }
+      description: 'Obtiene la lista o detalles de empleados filtrados por id o búsqueda general',
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING, description: 'ID o Cédula específica del empleado' },
+          searchQuery: { type: Type.STRING, description: 'Nombre, apellido o departamento para buscar' }
+        }
+      }
     };
 
     const calculatePayrollDeclaration: FunctionDeclaration = {
@@ -86,7 +92,7 @@ Use the available function tools to query real data. Never invent payroll number
       }));
 
     const chat = ai.chats.create({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       config: {
         systemInstruction,
         tools,
@@ -104,8 +110,31 @@ Use the available function tools to query real data. Never invent payroll number
         let toolResult = null;
         
         if (call.name === 'get_employees') {
-          const snapshot = await db.collection('employees').where('companyId', '==', companyId).get();
-          toolResult = { total_employees: snapshot.size, employees: snapshot.docs.map(d => ({ id: d.id, name: d.data().name, position: d.data().position })) };
+          const { id, searchQuery } = call.args as any;
+          let ref = db.collection('employees').where('companyId', '==', companyId);
+          
+          if (id) {
+            const doc = await db.collection('employees').doc(id).get();
+            if (doc.exists && doc.data()?.companyId === companyId) {
+              toolResult = { employees: [{ id: doc.id, ...doc.data() }] };
+            } else {
+              toolResult = { employees: [] };
+            }
+          } else {
+            const snapshot = await ref.get();
+            let employees = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            if (searchQuery) {
+              const query = searchQuery.toLowerCase();
+              employees = employees.filter((e: any) => 
+                e.name?.toLowerCase().includes(query) || 
+                e.firstName?.toLowerCase().includes(query) ||
+                e.firstLastName?.toLowerCase().includes(query) ||
+                e.department?.toLowerCase().includes(query) ||
+                e.role?.toLowerCase().includes(query)
+              );
+            }
+            toolResult = { total_employees: employees.length, employees: employees.map((e: any) => ({ id: e.id, name: e.name, department: e.department, role: e.role, email: e.email, baseSalary: e.baseSalary, status: e.status })) };
+          }
         } else if (call.name === 'calculate_payroll') {
           // Fetch employees
           const empSnapshot = await db.collection('employees').where('companyId', '==', companyId).get();

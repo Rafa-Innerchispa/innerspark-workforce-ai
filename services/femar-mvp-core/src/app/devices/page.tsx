@@ -117,35 +117,35 @@ export default function DevicesPage() {
           {t("devices")}
         </h1>
         <p className="text-sm md:text-base text-zinc-400">
-          Monitoreo y administración de hardware biométrico ZKTeco
+          {t("devices_desc")}
         </p>
       </div>
 
       <div className="bg-zinc-800/60 border border-blue-500/30 rounded-2xl p-6 mb-2">
         <h2 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2">
-          <Wifi className="w-5 h-5" /> Configuración de tu Reloj ZKTeco
+          <Wifi className="w-5 h-5" /> {t("devices_config_title")}
         </h2>
         <p className="text-zinc-300 mb-4 text-sm leading-relaxed">
-          Para conectar tu equipo biométrico a la nube, entra al menú del reloj y ve a <strong>Red &gt; Configuración del Servidor en la Nube (ADMS)</strong> e ingresa los siguientes datos exactos. El equipo aparecerá abajo en "Solicitudes Pendientes" inmediatamente.
+          {t("devices_config_desc")}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-700/50">
-            <p className="text-xs text-zinc-500 mb-1">Dirección del Servidor (Server Address)</p>
+            <p className="text-xs text-zinc-500 mb-1">{t("devices_server_address")}</p>
             <p className="font-mono text-lg text-white font-bold tracking-wider">104.197.119.150</p>
           </div>
           <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-700/50">
-            <p className="text-xs text-zinc-500 mb-1">Puerto del Servidor (Server Port)</p>
+            <p className="text-xs text-zinc-500 mb-1">{t("devices_server_port")}</p>
             <p className="font-mono text-lg text-white font-bold tracking-wider">80</p>
           </div>
           <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-700/50">
-            <p className="text-xs text-zinc-500 mb-1">Habilitar Nombre de Dominio (Enable Domain Name)</p>
-            <p className="font-mono text-lg text-white font-bold tracking-wider text-red-400">NO / DESACTIVADO</p>
+            <p className="text-xs text-zinc-500 mb-1">{t("devices_enable_domain")}</p>
+            <p className="font-mono text-lg text-white font-bold tracking-wider text-red-400">{t("devices_no_disabled")}</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GlassWidget title="Solicitudes Pendientes (Push)" icon={Server}>
+        <GlassWidget title={t("devices_pending_req")} icon={Server}>
           <div className="flex flex-col gap-3 p-4">
             {loading ? (
               <div className="flex justify-center p-8 text-zinc-500">
@@ -154,8 +154,8 @@ export default function DevicesPage() {
             ) : pendingDevices.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-zinc-500 gap-2 text-center">
                 <Wifi className="w-8 h-8 mb-2 opacity-50" />
-                <p>No hay equipos intentando conectarse a la red en este momento.</p>
-                <p className="text-xs opacity-70">Asegúrese de configurar el ADMS Server en su reloj ZKTeco apuntando a la nube.</p>
+                <p>{t("devices_no_pending")}</p>
+                <p className="text-xs opacity-70">{t("devices_pending_instruction")}</p>
               </div>
             ) : (
               pendingDevices.map((device, idx) => (
@@ -170,7 +170,7 @@ export default function DevicesPage() {
                         IP: {device.ip}
                       </p>
                       <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
-                        <Clock className="w-3 h-3" /> Último ping: {formatTime(device.lastSync)}
+                        <Clock className="w-3 h-3" /> {t("devices_last_ping")}: {formatTime(device.lastSync)}
                       </p>
                     </div>
                   </div>
@@ -179,13 +179,13 @@ export default function DevicesPage() {
                       onClick={() => handleIgnore(device.id)}
                       className="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors border border-zinc-700"
                     >
-                      Ignorar
+                      {t("devices_ignore")}
                     </button>
                     <button 
                       onClick={() => handleApprove(device.id)}
                       className="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-1"
                     >
-                      <ShieldCheck className="w-3 h-3" /> Aprobar
+                      <ShieldCheck className="w-3 h-3" /> {t("devices_approve_btn")}
                     </button>
                   </div>
                 </div>
@@ -194,9 +194,9 @@ export default function DevicesPage() {
           </div>
         </GlassWidget>
 
-        <GlassWidget title="Equipos Aprobados (En Línea)" icon={Activity}>
+        <GlassWidget title={t("devices_approved_online")} icon={Activity}>
           <div className="flex justify-between items-center mb-2 mt-4 px-4 border-b border-zinc-800 pb-2">
-            <span className="text-xs text-zinc-400">Sincronización manual</span>
+            <span className="text-xs text-zinc-400">{t("devices_manual_sync")}</span>
             <button 
               onClick={async () => {
                 try {
@@ -213,7 +213,7 @@ export default function DevicesPage() {
               }}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)] rounded-lg text-xs transition-colors flex items-center gap-2"
             >
-              Forzar Sincronización de Usuarios
+              {t("devices_force_sync")}
             </button>
           </div>
           <div className="flex flex-col gap-3 p-4 pt-2">
@@ -224,7 +224,7 @@ export default function DevicesPage() {
             ) : activeDevices.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-8 text-zinc-500 gap-2 text-center">
                 <Activity className="w-8 h-8 mb-2 opacity-50" />
-                <p>No hay equipos aprobados en línea.</p>
+                <p>{t("devices_no_approved")}</p>
               </div>
             ) : (
               activeDevices.map((device, idx) => (
@@ -244,7 +244,7 @@ export default function DevicesPage() {
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
                       <span className="text-xs font-medium text-green-400 bg-green-400/10 px-2 py-1 rounded border border-green-500/20">
-                        En Línea
+                        {t("devices_online_status")}
                       </span>
                       <button 
                         onClick={() => {
@@ -253,7 +253,7 @@ export default function DevicesPage() {
                         }}
                         className="text-xs text-blue-400 hover:text-blue-300 underline"
                       >
-                        Editar Datos
+                        {t("devices_edit_data")}
                       </button>
                     </div>
                   </div>

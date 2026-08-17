@@ -1,9 +1,11 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useI18n } from '@/contexts/I18nContext';
 
 export default function MobileCheckin() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [status, setStatus] = useState('Idle');
   const [photo, setPhoto] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -80,42 +82,56 @@ export default function MobileCheckin() {
     });
   };
 
+  const getStatusText = (s: string) => {
+    if (s === "Idle") return t("status_idle");
+    if (s.includes("Camera access blocked")) return t("status_camera_blocked");
+    if (s === "Camera active") return t("status_camera_active");
+    if (s === "Failed to access camera") return t("status_camera_failed");
+    if (s === "Getting location...") return t("status_getting_location");
+    if (s === "Submitting...") return t("status_submitting");
+    if (s === "Check-in successful!") return t("status_success");
+    if (s === "Check-in failed on server") return t("status_failed_server");
+    if (s === "Check-in failed completely") return t("status_failed_complete");
+    if (s.startsWith("Geolocation error")) return t("status_geo_error") + s.replace("Geolocation error: ", "");
+    return s;
+  };
+
   return (
     <main style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-      <h1 style={{ color: '#333' }}>FEMAR Mobile Check-in</h1>
-      <p style={{ fontWeight: 'bold' }}>Status: {status}</p>
+      <h1 style={{ color: '#333' }}>{t("mobile_title")}</h1>
+      <p style={{ fontWeight: 'bold' }}>{t("status_label")}{getStatusText(status)}</p>
       
       {!photo ? (
         <div>
           <video ref={videoRef} style={{ width: '100%', borderRadius: '8px', background: '#000' }} autoPlay playsInline muted />
           <canvas ref={canvasRef} width={640} height={480} style={{ display: 'none' }} />
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <button onClick={startCamera} style={btnStyle('#0070f3')}>Start Camera</button>
-            <button onClick={capturePhoto} style={btnStyle('#10b981')}>Take Photo</button>
+            <button onClick={startCamera} style={btnStyle('#0070f3')}>{t("btn_start_camera")}</button>
+            <button onClick={capturePhoto} style={btnStyle('#10b981')}>{t("btn_take_photo")}</button>
           </div>
         </div>
       ) : (
         <div>
           <img src={photo} alt="Captured check-in photo" style={{ width: '100%', borderRadius: '8px' }} />
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <button onClick={() => setPhoto(null)} style={btnStyle('#ef4444')}>Retake</button>
-            <button onClick={submitCheckin} style={btnStyle('#10b981')}>Submit Check-in</button>
+            <button onClick={() => setPhoto(null)} style={btnStyle('#ef4444')}>{t("btn_retake")}</button>
+            <button onClick={submitCheckin} style={btnStyle('#10b981')}>{t("btn_submit_checkin")}</button>
           </div>
         </div>
       )}
 
       <div style={{ marginTop: '3rem', padding: '1.5rem', backgroundColor: '#f8f9fa', borderRadius: '12px', border: '1px solid #e5e7eb', textAlign: 'left' }}>
         <h3 style={{ color: '#1f2937', marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🛡️ Protocolo de Seguridad Georeferenciada
+          {t("sec_title")}
         </h3>
         <p style={{ fontSize: '0.9rem', color: '#4b5563', lineHeight: '1.5' }}>
-          Esta APK cuenta con validación de 3 capas para evitar fraudes en la asistencia remota:
+          {t("sec_subtitle")}
         </p>
         <ul style={{ fontSize: '0.85rem', color: '#374151', paddingLeft: '20px', lineHeight: '1.6' }}>
-          <li><strong>Anti Fake-GPS:</strong> El sistema lee variables nativas del sistema operativo Android/iOS e impide la marcación si se detectan "Ubicaciones Simuladas" habilitadas en las opciones de desarrollador.</li>
-          <li><strong>Geofencing:</strong> Si el GPS nativo ubica al dispositivo fuera de la "zona segura" asignada, no se activará el botón de Check-in.</li>
-          <li><strong>Liveness Biométrico:</strong> Es obligatorio el uso exclusivo de la cámara en vivo del dispositivo. Se bloquea a nivel de permisos el cargar imágenes desde la galería.</li>
-          <li><strong>Sincronización NTP:</strong> La hora se captura del servidor encriptado, no de la hora del sistema operativo del celular, evitando el "Time Tampering".</li>
+          <li><strong>{t("sec_gps_title")}</strong>{t("sec_gps_desc")}</li>
+          <li><strong>{t("sec_geo_title")}</strong>{t("sec_geo_desc")}</li>
+          <li><strong>{t("sec_live_title")}</strong>{t("sec_live_desc")}</li>
+          <li><strong>{t("sec_ntp_title")}</strong>{t("sec_ntp_desc")}</li>
         </ul>
       </div>
     </main>

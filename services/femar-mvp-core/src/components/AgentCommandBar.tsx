@@ -18,6 +18,8 @@ export default function AgentCommandBar({ onCommand, isProcessing }: AgentComman
   const [isRecording, setIsRecording] = useState(false);
   const [messages, setMessages] = useState<{ id: string; role: "user" | "model"; text: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [devices, setDevices] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -27,6 +29,29 @@ export default function AgentCommandBar({ onCommand, isProcessing }: AgentComman
         setMessages(JSON.parse(saved));
       } catch (e) {}
     }
+  }, [activeCompanyId]);
+
+  // Polling devices and realtime logs
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const resDev = await fetch('/api/devices');
+        if (resDev.ok) {
+          const data = await resDev.json();
+          setDevices(data.active || []);
+        }
+        const resLogs = await fetch('/api/logs/realtime');
+        if (resLogs.ok) {
+          const data = await resLogs.json();
+          setLogs((data.logs || []).slice(0, 5));
+        }
+      } catch (e) {
+        console.error("Error polling data:", e);
+      }
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
   }, [activeCompanyId]);
 
   // Save to localStorage when messages change
@@ -270,6 +295,60 @@ export default function AgentCommandBar({ onCommand, isProcessing }: AgentComman
             {sug}
           </button>
         ))}
+      </div>
+
+      {/* Real-time Hardware & Logs Monitor Panel */}
+      <div className="mt-8 p-4 glass-card border border-zinc-700/50 rounded-2xl bg-zinc-900/40 text-left">
+        <h4 className="text-sm font-semibold text-blue-400 mb-3 flex items-center gap-2">
+          <Bot className="w-4 h-4" /> {t("agent_monitor_title")}
+        </h4>
+        
+        {/* Devices list row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+          {devices.length === 0 ? (
+            <p className="text-xs text-zinc-500 col-span-full">{t("agent_monitor_no_dev")}</p>
+          ) : (
+            devices.map((d: any) => {
+              const isOnline = d.lastSync && (new Date().getTime() - new Date(d.lastSync).getTime() < 300000);
+              return (
+                <div key={d.id} className="p-2.5 rounded-xl bg-zinc-800/30 border border-zinc-700/50 flex items-center justify-between text-xs">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold text-zinc-300">SN: {d.id}</span>
+                    <span className="text-[10px] text-zinc-500">{d.location || "Principal"}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse animate-duration-1000' : 'bg-red-500'}`} />
+                    <span className="text-[10px] text-zinc-400">{isOnline ? "On" : "Off"}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Real-time Logs list */}
+        <div className="border-t border-zinc-800 pt-3">
+          <p className="text-xs font-semibold text-zinc-400 mb-2">{t("agent_monitor_latest_events")}</p>
+          <div className="flex flex-col gap-2 max-h-[120px] overflow-y-auto pr-1">
+            {logs.length === 0 ? (
+              <p className="text-xs text-zinc-500">{t("agent_monitor_waiting_logs")}</p>
+            ) : (
+              logs.map((log: any, idx: number) => {
+                const date = new Date(log.timestamp);
+                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-zinc-800/20 text-[11px] text-zinc-300 border border-zinc-800/50">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-400">👤 {log.employeeName || log.user_id}</span>
+                      <span>{log.type === "checkout" ? t("agent_monitor_checked_out") : t("agent_monitor_checked_in")} ({log.deviceName || t("agent_monitor_mobile")})</span>
+                    </div>
+                    <span className="text-zinc-500">{timeString}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
