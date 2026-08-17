@@ -92,7 +92,7 @@ Use the available function tools to query real data. Never invent payroll number
       }));
 
     const chat = ai.chats.create({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       config: {
         systemInstruction,
         tools,
@@ -177,7 +177,7 @@ Use the available function tools to query real data. Never invent payroll number
         const durationMs = Math.floor(Math.random() * 500) + 300; // Simulated latency log
         console.log(JSON.stringify({
           event: "gemini_function_call",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.6-flash",
           tenant: companyId,
           role: userRole,
           tool: call.name,
