@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Fingerprint, LogIn, AlertCircle, Phone, Mail, Globe, Sparkles, Languages } from 'lucide-react';
+import { useI18n } from '@/contexts/I18nContext';
 
 export default function LoginPage() {
   const [cedula, setCedula] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [lang, setLang] = useState<'en' | 'es'>('en');
+  const { language, setLanguage } = useI18n();
   const { login, user, isLoading } = useAuth();
   const router = useRouter();
 
@@ -28,18 +29,18 @@ export default function LoginPage() {
     setError('');
     
     if (!cedula.trim() || !password) {
-      setError(lang === 'en' ? 'Please enter your ID and password' : 'Por favor ingresa tu número de documento y contraseña');
+      setError(language === 'en' ? 'Please enter your ID and password' : 'Por favor ingresa tu número de documento y contraseña');
       return;
     }
 
     login(cedula.trim(), password).then((success) => {
       if (!success) {
-        setError(lang === 'en' ? 'Invalid credentials or inactive account. Verify your data.' : 'Credenciales inválidas o cuenta inactiva. Verifica tus datos.');
+        setError(language === 'en' ? 'Invalid credentials or inactive account. Verify your data.' : 'Credenciales inválidas o cuenta inactiva. Verifica tus datos.');
       }
     });
   };
 
-  const toggleLang = () => setLang(prev => prev === 'en' ? 'es' : 'en');
+  const toggleLang = () => setLanguage(language === 'en' ? 'es' : 'en');
 
   if (isLoading || user) {
     return <div className="min-h-[100dvh] flex items-center justify-center bg-zinc-950"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -80,7 +81,7 @@ export default function LoginPage() {
       register: 'Regístrate aquí',
       rights: 'Todos los derechos reservados.'
     }
-  }[lang];
+  }[language];
 
   return (
     <div className="min-h-[100dvh] w-full flex relative overflow-hidden bg-zinc-950">
@@ -89,7 +90,7 @@ export default function LoginPage() {
         className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-700/50 text-zinc-300 text-sm font-medium transition-colors"
       >
         <Languages className="w-4 h-4" />
-        {lang === 'en' ? 'Español' : 'English'}
+        {language === 'en' ? 'Español' : 'English'}
       </button>
       
       {/* Left side: Branding */}

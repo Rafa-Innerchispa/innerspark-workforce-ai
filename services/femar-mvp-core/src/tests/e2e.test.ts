@@ -15,7 +15,10 @@ jest.mock('firebase-admin/firestore', () => {
   const mockGet = jest.fn();
   const mockAdd = jest.fn();
   const mockLimit = jest.fn().mockReturnValue({ get: mockGet });
-  const mockDoc = jest.fn();
+  const mockDoc = jest.fn(() => ({
+    set: jest.fn().mockResolvedValue(true),
+    get: jest.fn().mockResolvedValue({ exists: true, data: () => ({}) })
+  }));
   const mockCollection = jest.fn().mockReturnValue({ limit: mockLimit, add: mockAdd, doc: mockDoc });
 
   const mockBatchCommit = jest.fn();

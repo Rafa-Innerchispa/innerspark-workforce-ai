@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, Tags, Users, LogOut, Languages } from 'lucide-react';
 import Link from 'next/link';
+import { useI18n } from '@/contexts/I18nContext';
 
 export default function ModulesPage() {
   const { user, activeCompanyId, logout } = useAuth();
   const router = useRouter();
-  const [lang, setLang] = useState<'en' | 'es'>('en');
+  const { language, setLanguage } = useI18n();
 
   useEffect(() => {
     // If not authenticated, go to login
@@ -25,7 +26,7 @@ export default function ModulesPage() {
     router.push('/login');
   };
 
-  const toggleLang = () => setLang(prev => prev === 'en' ? 'es' : 'en');
+  const toggleLang = () => setLanguage(language === 'en' ? 'es' : 'en');
 
   const t = {
     en: {
@@ -48,7 +49,7 @@ export default function ModulesPage() {
       mod2Title: 'Control y Venta de Tags',
       mod2Desc: 'Gestión de inventario de tags, punto de venta (POS) y control de clientes vinculados.'
     }
-  }[lang];
+  }[language];
 
   return (
     <div className="min-h-[100dvh] w-full flex flex-col p-4 relative overflow-hidden bg-black text-white">
@@ -57,7 +58,7 @@ export default function ModulesPage() {
         className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-700/50 text-zinc-300 text-sm font-medium transition-colors"
       >
         <Languages className="w-4 h-4" />
-        {lang === 'en' ? 'Español' : 'English'}
+        {language === 'en' ? 'Español' : 'English'}
       </button>
 
       {/* Background Effects */}

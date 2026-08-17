@@ -10,6 +10,10 @@ export default function MobileCheckin() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const startCamera = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus('Camera access blocked. Please use a secure HTTPS connection (or localhost) to allow camera access.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       if (videoRef.current) {

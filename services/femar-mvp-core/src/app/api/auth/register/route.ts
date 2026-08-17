@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
-    const { cedula, name, password, companyId } = await req.json();
+    const { cedula, name, password, companyId, documentType = 'OTHER', country = 'OTHER' } = await req.json();
 
     if (!cedula || !name || !password || !companyId) {
       return NextResponse.json({ success: false, message: 'Todos los campos son obligatorios' }, { status: 400 });
@@ -20,10 +20,13 @@ export async function POST(req: Request) {
     const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
 
     await docRef.set({
+      id: cedula,
       cedula,
       name,
       password: hashedPassword,
       companyId,
+      documentType,
+      country,
       role: 'employee', // Default role, admin can upgrade
       status: 'PENDING',
       createdAt: new Date().toISOString()

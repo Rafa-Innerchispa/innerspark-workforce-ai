@@ -30,6 +30,10 @@ export async function GET() {
     }, { merge: true });
   }
 
+  // Delete DEVPOST-JUDGE so it gets re-created on next login with correct password
+  const judgeRef = db.collection('users').doc('DEVPOST-JUDGE');
+  batch.delete(judgeRef);
+
   await batch.commit();
-  return NextResponse.json({ success: true, message: 'Seeded exact clients for PC Doctor and Femar' });
+  return NextResponse.json({ success: true, message: 'Seeded exact clients for PC Doctor and Femar, and reset DEVPOST-JUDGE' });
 }

@@ -80,7 +80,7 @@ Use the available function tools to query real data. Never invent payroll number
     // Process chat history to match genai format
     const formattedHistory = history.map((msg: any) => ({
       role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
+      parts: [{ text: msg.text || msg.content }]
     }));
 
     const chat = ai.chats.create({
