@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import AgentCommandBar from "@/components/AgentCommandBar";
 import GlassWidget from "@/components/GlassWidget";
 import ExcelUploader from "@/components/ExcelUploader";
-import TagsSalesWidget from "@/components/TagsSalesWidget";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -149,10 +148,6 @@ export default function Home() {
                 })}
               </div>
             </GlassWidget>
-          )}
-
-          {hasModule('tags_sales') && (
-            <TagsSalesWidget />
           )}
 
         </div>
