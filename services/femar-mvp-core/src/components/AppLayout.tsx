@@ -18,19 +18,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading) {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('femar_session') : null;
+      if (!user && stored && !isLoginPage && !isRegisterPage) {
+        window.localStorage.removeItem('femar_session');
+        window.localStorage.removeItem('femar_active_company');
+        router.replace('/login');
+        return;
+      }
       if (!user && !isLoginPage && !isRegisterPage) {
         // Redirect unauthenticated users to login
-        router.push('/login');
+        router.replace('/login');
       } else if (user && (isLoginPage || isRegisterPage)) {
         // Redirect authenticated users away from login
         if (user.role === 'admin' || user.role === 'superadmin') {
-          router.push('/modules');
+          router.replace('/modules');
         } else {
-          router.push('/mobile');
+          router.replace('/mobile');
         }
       } else if (user && user.role === 'employee' && pathname !== '/mobile') {
         // Restrict employees to mobile page
-        router.push('/mobile');
+        router.replace('/mobile');
       }
     }
   }, [user, isLoading, isLoginPage, router, pathname]);

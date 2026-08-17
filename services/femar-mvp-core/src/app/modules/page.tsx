@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { LayoutDashboard, Tags, Users, LogOut, Languages } from 'lucide-react';
-import Link from 'next/link';
 
 export default function ModulesPage() {
   const { user, activeCompanyId, logout } = useAuth();
@@ -99,8 +98,9 @@ export default function ModulesPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl mx-auto">
           {/* Module 1: Workforce Management (Always available) */}
-          <Link 
-            href="/"
+          <button
+            type="button"
+            onClick={() => window.location.assign('/')}
             className="group relative overflow-hidden rounded-3xl p-8 bg-zinc-900/50 border border-zinc-800 hover:border-blue-500/50 transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] hover:-translate-y-1"
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-purple-600 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
@@ -122,12 +122,13 @@ export default function ModulesPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
             </div>
-          </Link>
+          </button>
 
           {/* Module 2: Tags Sales (Only for IA PRO or SuperAdmin) */}
           {(activeCompanyId === 'iapro' || user.role === 'superadmin') && (
-            <Link 
-              href="/tags"
+            <button
+              type="button"
+              onClick={() => window.location.assign('/tags')}
               className="group relative overflow-hidden rounded-3xl p-8 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-1"
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-teal-600 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
@@ -149,7 +150,7 @@ export default function ModulesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
               </div>
-            </Link>
+            </button>
           )}
         </div>
       </main>
