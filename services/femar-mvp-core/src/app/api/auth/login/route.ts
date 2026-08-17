@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     const response = NextResponse.json({ success: true, user: userSafe });
     response.cookies.set('session_token', userSafe.id, { 
        httpOnly: true, 
-       secure: process.env.NODE_ENV === 'production', 
+       secure: false, // MVP FIX: Avoids issues behind proxies or local HTTP
        sameSite: 'lax', 
        path: '/' 
     });
