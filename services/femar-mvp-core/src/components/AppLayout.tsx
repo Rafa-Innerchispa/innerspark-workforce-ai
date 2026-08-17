@@ -31,7 +31,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       } else if (user && (isLoginPage || isRegisterPage)) {
         // Redirect authenticated users away from login
         if (user.role === 'admin' || user.role === 'superadmin') {
-          router.replace('/modules');
+          router.replace('/');
         } else {
           router.replace('/mobile');
         }
