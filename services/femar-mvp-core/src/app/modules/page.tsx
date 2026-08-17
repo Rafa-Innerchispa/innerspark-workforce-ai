@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { LayoutDashboard, Tags, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, Tags, Users, LogOut, Languages } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ModulesPage() {
   const { user, activeCompanyId, logout } = useAuth();
   const router = useRouter();
+  const [lang, setLang] = useState<'en' | 'es'>('en');
 
   useEffect(() => {
     // If not authenticated, go to login
@@ -24,8 +25,41 @@ export default function ModulesPage() {
     router.push('/login');
   };
 
+  const toggleLang = () => setLang(prev => prev === 'en' ? 'es' : 'en');
+
+  const t = {
+    en: {
+      logout: 'Logout',
+      selectMod: 'Select a Module',
+      welcome: 'Welcome to InnerSpark Workforce AI. Select the module you wish to access based on your active subscription.',
+      mod1Title: 'Workforce Control',
+      mod1Desc: 'Attendance management, payroll roles, updates, overtime, and remote AI clock-ins.',
+      enterMod: 'Enter Module',
+      mod2Title: 'Tag Control & Sales',
+      mod2Desc: 'Tag inventory management, Point of Sale (POS), and linked client control.'
+    },
+    es: {
+      logout: 'Cerrar Sesión',
+      selectMod: 'Selecciona un Módulo',
+      welcome: 'Bienvenido a InnerSpark Workforce AI. Selecciona el módulo al que deseas acceder según tu suscripción activa.',
+      mod1Title: 'Control de Personal',
+      mod1Desc: 'Gestión de asistencia, roles de pago, novedades, horas extras y marcación remota con IA.',
+      enterMod: 'Ingresar al módulo',
+      mod2Title: 'Control y Venta de Tags',
+      mod2Desc: 'Gestión de inventario de tags, punto de venta (POS) y control de clientes vinculados.'
+    }
+  }[lang];
+
   return (
     <div className="min-h-[100dvh] w-full flex flex-col p-4 relative overflow-hidden bg-black text-white">
+      <button 
+        onClick={toggleLang}
+        className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-700/50 text-zinc-300 text-sm font-medium transition-colors"
+      >
+        <Languages className="w-4 h-4" />
+        {lang === 'en' ? 'Español' : 'English'}
+      </button>
+
       {/* Background Effects */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-900/20 rounded-full blur-[120px] -z-10 animate-pulse-slow"></div>
       
@@ -38,28 +72,28 @@ export default function ModulesPage() {
           <div>
             <h2 className="font-semibold text-lg">{user.name}</h2>
             <p className="text-zinc-400 text-sm">
-              {user.role === 'superadmin' ? 'Super Administrador' : 'Administrador'} • {activeCompanyId?.toUpperCase()}
+              {user.role === 'superadmin' ? 'Super Admin' : 'Admin'} • {activeCompanyId?.toUpperCase()}
             </p>
           </div>
         </div>
         
         <button 
           onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors mr-24"
         >
           <LogOut className="w-4 h-4" />
-          <span className="text-sm font-medium hidden sm:inline">Cerrar Sesión</span>
+          <span className="text-sm font-medium hidden sm:inline">{t.logout}</span>
         </button>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-6xl mx-auto flex flex-col items-center justify-center px-4 py-12">
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 mt-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400">
-            Selecciona un Módulo
+            {t.selectMod}
           </h1>
           <p className="text-zinc-400 max-w-lg mx-auto">
-            Bienvenido a InnerSpark Workforce AI. Selecciona el módulo al que deseas acceder según tu suscripción activa.
+            {t.welcome}
           </p>
         </div>
 
@@ -76,14 +110,14 @@ export default function ModulesPage() {
             </div>
             
             <h3 className="text-2xl font-bold mb-3 text-white group-hover:text-blue-400 transition-colors">
-              Control de Personal
+              {t.mod1Title}
             </h3>
             <p className="text-zinc-400 leading-relaxed mb-6">
-              Gestión de asistencia, roles de pago, novedades, horas extras y marcación remota con IA.
+              {t.mod1Desc}
             </p>
             
             <div className="flex items-center text-blue-400 font-medium text-sm">
-              <span>Ingresar al módulo</span>
+              <span>{t.enterMod}</span>
               <svg className="w-4 h-4 ml-2 group-hover:translate-x-2 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
@@ -103,14 +137,14 @@ export default function ModulesPage() {
               </div>
               
               <h3 className="text-2xl font-bold mb-3 text-white group-hover:text-emerald-400 transition-colors">
-                Control y Venta de Tags
+                {t.mod2Title}
               </h3>
               <p className="text-zinc-400 leading-relaxed mb-6">
-                Gestión de inventario de tags, punto de venta (POS) y control de clientes vinculados.
+                {t.mod2Desc}
               </p>
               
               <div className="flex items-center text-emerald-400 font-medium text-sm">
-                <span>Ingresar al módulo</span>
+                <span>{t.enterMod}</span>
                 <svg className="w-4 h-4 ml-2 group-hover:translate-x-2 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
