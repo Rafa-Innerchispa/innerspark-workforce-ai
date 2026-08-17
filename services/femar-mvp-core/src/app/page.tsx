@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import AgentCommandBar from "@/components/AgentCommandBar";
+import ClientErrorBoundary from "@/components/ClientErrorBoundary";
 import GlassWidget from "@/components/GlassWidget";
 import ExcelUploader from "@/components/ExcelUploader";
 import { useI18n } from "@/contexts/I18nContext";
@@ -10,6 +11,14 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { AlertCircle, CheckCircle2, Clock, FileSpreadsheet, Fingerprint, MonitorSmartphone, TrendingUp } from "lucide-react";
 
 export default function Home() {
+  return (
+    <ClientErrorBoundary fallbackTitle="Dashboard recovery mode">
+      <DashboardContent />
+    </ClientErrorBoundary>
+  );
+}
+
+function DashboardContent() {
   const { t, language } = useI18n();
   const { activeCompanyId, user } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -55,7 +64,7 @@ export default function Home() {
     fetchLiveData();
     const interval = setInterval(fetchLiveData, 5000);
     return () => clearInterval(interval);
-  }, [activeCompanyId, companyEmployees]);
+  }, [activeCompanyId]);
 
   const handleAgentCommand = (command: string) => {
     setIsProcessing(true);
@@ -91,7 +100,9 @@ export default function Home() {
       </div>
 
       <div className="w-full">
-        <AgentCommandBar onCommand={handleAgentCommand} isProcessing={isProcessing} />
+        <ClientErrorBoundary fallbackTitle="Gemini agent unavailable">
+          <AgentCommandBar onCommand={handleAgentCommand} isProcessing={isProcessing} />
+        </ClientErrorBoundary>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 mt-4">
@@ -136,37 +147,40 @@ export default function Home() {
             </GlassWidget>
           )}
 
-          <GlassWidget title={copy.liveMarks} icon={Fingerprint}>
-            <div className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
-                <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
-                  <tr>
-                    <th className="px-4 py-3">{copy.date}</th>
-                    <th className="px-4 py-3">{copy.employee}</th>
-                    <th className="px-4 py-3">{copy.source}</th>
-                    <th className="px-4 py-3">{copy.status}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/50">
-                  {attendanceLogs.length === 0 ? (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-500">{copy.noMarks}</td></tr>
-                  ) : attendanceLogs.map((log: any) => {
-                    const emp = companyEmployees.find((item) => item.id === log.user_id);
-                    const state = String(log.state ?? "");
-                    const label = state === "0" ? copy.in : state === "1" ? copy.out : copy.mark;
-                    return (
-                      <tr key={log.id || `${log.user_id}-${log.timestamp}`} className="hover:bg-zinc-800/40">
-                        <td className="px-4 py-3 text-blue-400">{new Date(log.timestamp).toLocaleString(language === "es" ? "es-EC" : "en-US")}</td>
-                        <td className="px-4 py-3 text-white">{emp?.name || log.user_id || "Mobile user"}</td>
-                        <td className="px-4 py-3">{log.source}</td>
-                        <td className="px-4 py-3">{label}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </GlassWidget>
+          <ClientErrorBoundary fallbackTitle="Live attendance unavailable">
+            <GlassWidget title={copy.liveMarks} icon={Fingerprint}>
+              <div className="p-0 overflow-x-auto">
+                <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
+                  <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
+                    <tr>
+                      <th className="px-4 py-3">{copy.date}</th>
+                      <th className="px-4 py-3">{copy.employee}</th>
+                      <th className="px-4 py-3">{copy.source}</th>
+                      <th className="px-4 py-3">{copy.status}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/50">
+                    {attendanceLogs.length === 0 ? (
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-500">{copy.noMarks}</td></tr>
+                    ) : attendanceLogs.map((log: any) => {
+                      const emp = companyEmployees.find((item) => item.id === log.user_id);
+                      const state = String(log.state ?? "");
+                      const label = state === "0" ? copy.in : state === "1" ? copy.out : copy.mark;
+                      const timestamp = typeof log.timestamp === "string" ? log.timestamp : log.timestamp?.toDate?.()?.toISOString?.() || new Date().toISOString();
+                      return (
+                        <tr key={log.id || `${log.user_id}-${timestamp}`} className="hover:bg-zinc-800/40">
+                          <td className="px-4 py-3 text-blue-400">{new Date(timestamp).toLocaleString(language === "es" ? "es-EC" : "en-US")}</td>
+                          <td className="px-4 py-3 text-white">{emp?.name || log.user_id || "Mobile user"}</td>
+                          <td className="px-4 py-3">{log.source}</td>
+                          <td className="px-4 py-3">{label}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </GlassWidget>
+          </ClientErrorBoundary>
         </div>
 
         <div className="flex flex-col gap-6 md:gap-8">
