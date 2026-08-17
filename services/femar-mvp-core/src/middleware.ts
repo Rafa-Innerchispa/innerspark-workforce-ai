@@ -10,9 +10,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  // Force HTTPS redirect for web clients (excluding localhost/dev and biometric ADMS traffic)
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const host = request.headers.get('host') || '';
+  if (
+    forwardedProto === 'http' &&
+    !host.includes('localhost') &&
+    !host.includes('127.0.0.1')
+  ) {
+    const secureUrl = `https://${host}${url.pathname}${url.search}`;
+    return NextResponse.redirect(secureUrl, 301);
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: '/iclock/:path*',
+  matcher: [
+    '/iclock/:path*',
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
 };

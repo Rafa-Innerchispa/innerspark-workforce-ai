@@ -31,7 +31,13 @@ const translations = {
     "online": "En línea",
     "offline": "Desconectado",
     "approve": "Aprobar",
-    "review": "Revisar"
+    "review": "Revisar",
+    "approvals": "Aprobaciones",
+    "mobile_checkin": "Marcación Remota",
+    "help": "Ayuda / Manual",
+    "active_company": "Empresa Activa",
+    "logout": "Cerrar Sesión",
+    "subtitle": "Supervisión Avanzada de Fuerza Laboral y Analítica de Datos"
   },
   en: {
     "dashboard": "Dashboard",
@@ -53,7 +59,13 @@ const translations = {
     "online": "Online",
     "offline": "Offline",
     "approve": "Approve",
-    "review": "Review"
+    "review": "Review",
+    "approvals": "Approvals",
+    "mobile_checkin": "Remote Check-in",
+    "help": "Help / Manual",
+    "active_company": "Active Company",
+    "logout": "Logout",
+    "subtitle": "Advanced Workforce Supervision and Data Analytics"
   }
 };
 

@@ -61,7 +61,7 @@ export default function Home() {
             FEMAR Command Center
           </h1>
           <p className="text-sm md:text-base text-zinc-400">
-            Supervisión Avanzada de Fuerza Laboral y Analítica de Datos
+            {t("subtitle")}
           </p>
         </div>
 

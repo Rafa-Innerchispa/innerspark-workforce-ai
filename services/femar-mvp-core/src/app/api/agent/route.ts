@@ -77,11 +77,13 @@ SECURITY GUARDRAILS:
 4. You must always respond in the user's preferred language: ${language === 'en' ? 'English' : 'Spanish'}.
 Use the available function tools to query real data. Never invent payroll numbers or anomaly logs.`;
 
-    // Process chat history to match genai format
-    const formattedHistory = history.map((msg: any) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text || msg.content }]
-    }));
+    // Process chat history to match genai format safely
+    const formattedHistory = history
+      .filter((msg: any) => msg.text || msg.content)
+      .map((msg: any) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: String(msg.text || msg.content) }]
+      }));
 
     const chat = ai.chats.create({
       model: 'gemini-2.5-flash',
