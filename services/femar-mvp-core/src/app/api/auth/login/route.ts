@@ -19,7 +19,23 @@ export async function POST(req: Request) {
     };
 
     const docRef = db.collection('users').doc(cedula);
-    const doc = await docRef.get();
+    let doc = await docRef.get();
+
+    // Auto-seed hardcoded admins for MVP if they don't exist
+    if (!doc.exists && mockDemos[cedula]) {
+      const newAdmin = mockDemos[cedula];
+      // Generate scrypt password using the entered password
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hashedBuffer = crypto.scryptSync(password, salt, 64);
+      const newPassword = `${salt}:${hashedBuffer.toString('hex')}`;
+      
+      await docRef.set({
+        ...newAdmin,
+        password: newPassword,
+        createdAt: new Date().toISOString()
+      });
+      doc = await docRef.get(); // Re-fetch
+    }
 
     if (!doc.exists) {
       return NextResponse.json({ success: false, message: 'Usuario no encontrado' }, { status: 404 });

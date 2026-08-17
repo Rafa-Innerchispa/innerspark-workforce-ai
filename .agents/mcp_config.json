@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "pcdoctor-mcp": {
+      "serverUrl": "https://mcp.pcdoctor.ai/mcp"
+    }
+  }
+}

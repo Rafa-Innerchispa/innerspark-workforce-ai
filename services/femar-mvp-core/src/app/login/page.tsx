@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { Fingerprint, LogIn, AlertCircle, Phone, Mail, Globe, Sparkles } from 'lucide-react';
+import { Fingerprint, LogIn, AlertCircle, Phone, Mail, Globe, Sparkles, Languages } from 'lucide-react';
 
 export default function LoginPage() {
   const [cedula, setCedula] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [lang, setLang] = useState<'en' | 'es'>('en');
   const { login, user, isLoading } = useAuth();
   const router = useRouter();
 
@@ -27,38 +28,84 @@ export default function LoginPage() {
     setError('');
     
     if (!cedula.trim() || !password) {
-      setError('Por favor ingresa tu número de cédula y contraseña');
+      setError(lang === 'en' ? 'Please enter your ID and password' : 'Por favor ingresa tu número de documento y contraseña');
       return;
     }
 
     login(cedula.trim(), password).then((success) => {
       if (!success) {
-        setError('Credenciales inválidas o cuenta inactiva. Verifica tus datos.');
+        setError(lang === 'en' ? 'Invalid credentials or inactive account. Verify your data.' : 'Credenciales inválidas o cuenta inactiva. Verifica tus datos.');
       }
     });
   };
+
+  const toggleLang = () => setLang(prev => prev === 'en' ? 'es' : 'en');
 
   if (isLoading || user) {
     return <div className="min-h-[100dvh] flex items-center justify-center bg-zinc-950"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
+  const t = {
+    en: {
+      eco: 'Technology Ecosystem',
+      title1: 'Powering the future of your company with ',
+      title2: 'Artificial Intelligence',
+      desc: 'Workforce AI is part of the ecosystem of advanced solutions developed to optimize operations and talent management.',
+      consulting: 'Consulting and custom technological development.',
+      smart: 'Smart solutions for support and infrastructure.',
+      subtitle: 'Intelligent Workforce Management System',
+      id: 'National ID / Document',
+      idPlace: 'Ex. DEVPOST-JUDGE or Passport',
+      pass: 'Password',
+      passPlace: 'Enter your password',
+      loginBtn: 'Enter System',
+      noAccount: "Don't have an account? ",
+      register: 'Register here',
+      rights: 'All rights reserved.'
+    },
+    es: {
+      eco: 'Ecosistema Tecnológico',
+      title1: 'Potenciando el futuro de tu empresa con ',
+      title2: 'Inteligencia Artificial',
+      desc: 'Workforce AI es parte del ecosistema de soluciones avanzadas desarrolladas para optimizar operaciones y gestión de talento.',
+      consulting: 'Consultoría y desarrollo tecnológico a medida.',
+      smart: 'Soluciones inteligentes para soporte e infraestructura.',
+      subtitle: 'Sistema Inteligente de Gestión de Fuerza Laboral',
+      id: 'Cédula / Documento',
+      idPlace: 'Ej. DEVPOST-JUDGE o Pasaporte',
+      pass: 'Contraseña',
+      passPlace: 'Ingresa tu contraseña',
+      loginBtn: 'Ingresar al Sistema',
+      noAccount: '¿No tienes cuenta? ',
+      register: 'Regístrate aquí',
+      rights: 'Todos los derechos reservados.'
+    }
+  }[lang];
+
   return (
     <div className="min-h-[100dvh] w-full flex relative overflow-hidden bg-zinc-950">
+      <button 
+        onClick={toggleLang}
+        className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-700/50 text-zinc-300 text-sm font-medium transition-colors"
+      >
+        <Languages className="w-4 h-4" />
+        {lang === 'en' ? 'Español' : 'English'}
+      </button>
       
-      {/* Left side: Branding (Hidden on mobile, visible on lg screens) */}
+      {/* Left side: Branding */}
       <div className="hidden lg:flex w-1/2 flex-col justify-between p-12 relative overflow-hidden border-r border-zinc-800/50 bg-zinc-900/20">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-luminosity"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-blue-900/10 via-zinc-950/80 to-zinc-950"></div>
         
         <div className="relative z-10 animate-in fade-in slide-in-from-left-8 duration-700">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium mb-8">
-            <Sparkles className="w-4 h-4" /> Ecosistema Tecnológico
+            <Sparkles className="w-4 h-4" /> {t.eco}
           </div>
           <h1 className="text-4xl xl:text-5xl font-bold text-white mb-6 leading-tight">
-            Potenciando el futuro de tu empresa con <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">Inteligencia Artificial</span>
+            {t.title1} <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">{t.title2}</span>
           </h1>
           <p className="text-zinc-400 text-lg max-w-md">
-            Workforce AI es parte del ecosistema de soluciones avanzadas desarrolladas para optimizar operaciones y gestión de talento.
+            {t.desc}
           </p>
         </div>
 
@@ -66,45 +113,28 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-8">
             <div className="flex flex-col gap-2 p-4 rounded-2xl bg-zinc-800/30 border border-zinc-700/30 backdrop-blur-sm hover:bg-zinc-800/50 transition-colors">
               <h3 className="text-white font-semibold text-lg">Innerchispa</h3>
-              <p className="text-zinc-400 text-sm">Consultoría y desarrollo tecnológico a medida.</p>
+              <p className="text-zinc-400 text-sm">{t.consulting}</p>
               <a href="https://www.innerchispa.us" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors">
                 <Globe className="w-4 h-4" /> www.innerchispa.us
               </a>
             </div>
             <div className="flex flex-col gap-2 p-4 rounded-2xl bg-zinc-800/30 border border-zinc-700/30 backdrop-blur-sm hover:bg-zinc-800/50 transition-colors">
               <h3 className="text-white font-semibold text-lg">PC Doctor AI</h3>
-              <p className="text-zinc-400 text-sm">Soluciones inteligentes para soporte e infraestructura.</p>
+              <p className="text-zinc-400 text-sm">{t.smart}</p>
               <a href="https://www.pcdoctor.ai" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors">
                 <Globe className="w-4 h-4" /> www.pcdoctor.ai
               </a>
             </div>
-          </div>
-
-          <div className="pt-8 border-t border-zinc-800/50 flex flex-col sm:flex-row gap-6">
-            <a href="mailto:info@innerchispa.us" className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group">
-              <div className="w-10 h-10 rounded-full bg-zinc-800/50 flex items-center justify-center border border-zinc-700/50 group-hover:border-blue-500/50 group-hover:bg-blue-500/10 transition-colors">
-                <Mail className="w-4 h-4 group-hover:text-blue-400" />
-              </div>
-              <span className="text-sm">info@innerchispa.us</span>
-            </a>
-            <a href="tel:+593983736811" className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group">
-              <div className="w-10 h-10 rounded-full bg-zinc-800/50 flex items-center justify-center border border-zinc-700/50 group-hover:border-blue-500/50 group-hover:bg-blue-500/10 transition-colors">
-                <Phone className="w-4 h-4 group-hover:text-blue-400" />
-              </div>
-              <span className="text-sm">+593 98 373 6811</span>
-            </a>
           </div>
         </div>
       </div>
 
       {/* Right side: Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 relative">
-        {/* Background Effects for Right Side */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] -z-10 animate-pulse-slow"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] -z-10 animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
 
         <div className="w-full max-w-md glass-card rounded-3xl p-8 shadow-2xl border border-zinc-800/50 backdrop-blur-xl animate-in fade-in zoom-in duration-500 relative overflow-hidden">
-          {/* Subtle top highlight */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
           
           <div className="text-center mb-8">
@@ -114,24 +144,13 @@ export default function LoginPage() {
             <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-2">
             InnerSpark Workforce AI
           </h1>
-            <p className="text-zinc-400 text-sm">
-              Sistema Inteligente de Gestión de Fuerza Laboral
-            </p>
-          </div>
-
-          {/* Mobile Only Links */}
-          <div className="lg:hidden flex flex-col gap-3 mb-8 pb-8 border-b border-zinc-800">
-            <p className="text-xs text-zinc-500 text-center uppercase tracking-wider font-semibold mb-2">Ecosistema</p>
-            <div className="flex justify-center gap-6 text-sm">
-               <a href="https://www.innerchispa.us" target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-blue-400 flex items-center gap-1"><Globe className="w-3 h-3"/> Innerchispa</a>
-               <a href="https://www.pcdoctor.ai" target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-blue-400 flex items-center gap-1"><Globe className="w-3 h-3"/> PC Doctor AI</a>
-            </div>
+            <p className="text-zinc-400 text-sm">{t.subtitle}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="cedula" className="block text-sm font-medium text-zinc-300 mb-2">
-                National ID / Document
+                {t.id}
               </label>
               <div className="relative group">
                 <input
@@ -140,7 +159,7 @@ export default function LoginPage() {
                   value={cedula}
                   onChange={(e) => setCedula(e.target.value)}
                   className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all group-hover:border-zinc-600"
-                  placeholder="Ej. EMP-XP-001 or Passport"
+                  placeholder={t.idPlace}
                   autoComplete="off"
                 />
               </div>
@@ -148,7 +167,7 @@ export default function LoginPage() {
             
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-2">
-                Contraseña
+                {t.pass}
               </label>
               <div className="relative group">
                 <input
@@ -157,7 +176,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all group-hover:border-zinc-600"
-                  placeholder="Ingresa tu contraseña"
+                  placeholder={t.passPlace}
                 />
               </div>
             </div>
@@ -174,24 +193,19 @@ export default function LoginPage() {
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 group"
             >
               <LogIn className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              <span>Ingresar al Sistema</span>
+              <span>{t.loginBtn}</span>
             </button>
             
             <div className="text-center mt-4">
-              <span className="text-sm text-zinc-400">¿No tienes cuenta? </span>
+              <span className="text-sm text-zinc-400">{t.noAccount}</span>
               <a href="/register" className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors">
-                Regístrate aquí
+                {t.register}
               </a>
             </div>
           </form>
 
           <div className="mt-8 text-center text-xs text-zinc-500">
-          <p>&copy; {new Date().getFullYear()} InnerSpark Workforce AI. Todos los derechos reservados.</p>
-          <div className="mt-2 flex items-center justify-center gap-4">
-            <a href="https://www.innerchispa.us" target="_blank" rel="noreferrer" className="hover:text-blue-400 transition-colors">innerchispa.us</a>
-            <span className="text-zinc-700">|</span>
-            <a href="https://www.pcdoctor.ai" target="_blank" rel="noreferrer" className="hover:text-blue-400 transition-colors">pcdoctor.ai</a>
-          </div>
+          <p>&copy; {new Date().getFullYear()} InnerSpark Workforce AI. {t.rights}</p>
         </div>
         </div>
       </div>
