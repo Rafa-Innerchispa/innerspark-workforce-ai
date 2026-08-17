@@ -22,8 +22,8 @@ export async function processCheckinNovelty(userId: string, timestampStr: string
   if (timestampStr.includes('T')) {
     dateObj = new Date(timestampStr);
   } else {
-    // Basic conversion for "YYYY-MM-DD HH:MM:SS"
-    dateObj = new Date(timestampStr.replace(' ', 'T') + 'Z');
+    // Treat as Guayaquil local time (UTC-05:00)
+    dateObj = new Date(timestampStr.replace(' ', 'T') + '-05:00');
   }
 
   // Convert to America/Guayaquil timezone

@@ -131,7 +131,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="cedula" className="block text-sm font-medium text-zinc-300 mb-2">
-                Número de Cédula
+                National ID / Document
               </label>
               <div className="relative group">
                 <input
@@ -140,7 +140,7 @@ export default function LoginPage() {
                   value={cedula}
                   onChange={(e) => setCedula(e.target.value)}
                   className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all group-hover:border-zinc-600"
-                  placeholder="Ej. 1717016487"
+                  placeholder="Ej. EMP-XP-001 or Passport"
                   autoComplete="off"
                 />
               </div>

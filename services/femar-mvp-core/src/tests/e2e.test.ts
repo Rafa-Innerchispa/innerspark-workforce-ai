@@ -6,21 +6,55 @@ jest.mock('firebase-admin/app', () => ({
   initializeApp: jest.fn(),
   getApps: jest.fn(() => []),
   cert: jest.fn(),
+  applicationDefault: jest.fn(),
 }));
 
-const mockCollection = jest.fn();
-const mockLimit = jest.fn();
-const mockGet = jest.fn();
-const mockAdd = jest.fn();
+import { db } from '@/lib/firebase';
 
-jest.mock('firebase-admin/firestore', () => ({
-  getFirestore: jest.fn(() => ({
-    collection: mockCollection.mockReturnValue({
-      limit: mockLimit.mockReturnValue({
-        get: mockGet,
-      }),
-      add: mockAdd,
-    }),
+jest.mock('firebase-admin/firestore', () => {
+  const mockGet = jest.fn();
+  const mockAdd = jest.fn();
+  const mockLimit = jest.fn().mockReturnValue({ get: mockGet });
+  const mockDoc = jest.fn();
+  const mockCollection = jest.fn().mockReturnValue({ limit: mockLimit, add: mockAdd, doc: mockDoc });
+
+  const mockBatchCommit = jest.fn();
+  const mockBatchSet = jest.fn();
+  const mockBatch = jest.fn().mockReturnValue({
+    commit: mockBatchCommit,
+    set: mockBatchSet
+  });
+
+  return {
+    getFirestore: jest.fn(() => ({
+      collection: mockCollection,
+      batch: mockBatch
+    }))
+  };
+});
+
+jest.mock('next/server', () => {
+  class MockNextResponse {
+    status: number;
+    constructor(body: any, init: any) {
+      this.status = init?.status || 200;
+      (this as any).text = async () => body;
+    }
+    static json(body: any, init: any) {
+      return { status: init?.status || 200, json: async () => body };
+    }
+  }
+  return {
+    NextResponse: MockNextResponse,
+    NextRequest: jest.fn(),
+  };
+});
+
+jest.mock('firebase-admin/storage', () => ({
+  getStorage: jest.fn(() => ({
+    bucket: jest.fn(() => ({
+      file: jest.fn(),
+    })),
   })),
 }));
 
@@ -31,7 +65,7 @@ describe('E2E Endpoints', () => {
 
   describe('Health Check (/api/health)', () => {
     it('should return 200 and alive status', async () => {
-      mockGet.mockResolvedValueOnce({ empty: false });
+      (db.collection('users').limit(1).get as jest.Mock).mockResolvedValueOnce({ empty: false });
       
       const response = await GET();
       const data = await response.json();
@@ -44,10 +78,13 @@ describe('E2E Endpoints', () => {
 
   describe('ADMS CData Checkin (/api/iclock/cdata)', () => {
     it('should return 400 when body is empty', async () => {
-      const req = new NextRequest('http://localhost/api/iclock/cdata', {
+      const req = {
         method: 'POST',
-        body: null
-      });
+        text: async () => '',
+        json: async () => ({}),
+        url: 'http://localhost/api/iclock/cdata',
+        nextUrl: { searchParams: new URLSearchParams() }
+      } as any;
       
       const response = await CDataPost(req);
       expect(response.status).toBe(400);
@@ -55,20 +92,23 @@ describe('E2E Endpoints', () => {
 
     it('should write synthetic checkin to firestore with test_ prefix', async () => {
       const logData = "1\t2023-01-01 10:00:00\t1\t1\t0\t0\t0";
-      const req = new NextRequest('http://localhost/api/iclock/cdata?SN=TEST_DEV', {
+      const req = {
         method: 'POST',
-        body: logData
-      });
+        text: async () => logData,
+        json: async () => ({}),
+        url: 'http://localhost/api/iclock/cdata?SN=TEST_DEV',
+        nextUrl: { searchParams: new URLSearchParams('?SN=TEST_DEV') }
+      } as any;
       
-      mockAdd.mockResolvedValueOnce({ id: 'test_doc_id' });
+      (db.batch().commit as jest.Mock).mockResolvedValueOnce(true);
       
       const response = await CDataPost(req);
       const text = await response.text();
       
       expect(response.status).toBe(200);
       expect(text).toBe('OK');
-      expect(mockCollection).toHaveBeenCalledWith('checkins');
-      expect(mockAdd).toHaveBeenCalled();
+      expect(db.collection).toHaveBeenCalledWith('adms_logs');
+      expect(db.batch().commit).toHaveBeenCalled();
     });
   });
 });

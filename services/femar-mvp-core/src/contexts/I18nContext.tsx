@@ -60,7 +60,7 @@ const translations = {
 const I18nContext = createContext<I18nContextProps | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>("es");
+  const [language, setLanguage] = useState<Language>("en");
 
   const t = (key: string) => {
     return translations[language][key as keyof typeof translations["es"]] || key;

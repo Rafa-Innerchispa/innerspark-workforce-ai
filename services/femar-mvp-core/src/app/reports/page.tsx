@@ -6,7 +6,7 @@ import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, U
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { mockEmployees } from "@/lib/mockData";
-import { generatePayrollReport, getDeterministicRandom } from "@/lib/reportUtils";
+import { generateDeterministicPayroll } from "@/lib/reportUtils";
 import * as XLSX from "xlsx";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -54,18 +54,17 @@ function ReportsContent() {
   const [loadingMobileLogs, setLoadingMobileLogs] = useState(false);
 
   React.useEffect(() => {
-    if (reportType === 'mobile_checkins') {
-      setLoadingMobileLogs(true);
-      fetch('/api/mobile/logs')
-        .then(res => res.json())
-        .then(data => {
-          if (data.logs) {
-            setMobileLogs(data.logs);
-          }
-        })
-        .finally(() => setLoadingMobileLogs(false));
-    }
-  }, [reportType]);
+    // Fetch logs for ALL report types since we removed fake data generators
+    setLoadingMobileLogs(true);
+    fetch('/api/mobile/logs')
+      .then(res => res.json())
+      .then(data => {
+        if (data.logs) {
+          setMobileLogs(data.logs);
+        }
+      })
+      .finally(() => setLoadingMobileLogs(false));
+  }, [activeCompanyId]);
 
   React.useEffect(() => {
     if (searchParams?.get("download") === "pdf") {
@@ -91,40 +90,32 @@ function ReportsContent() {
     }
 
     if (reportType === "nomina") {
-      const periodStr = getReportSubtitle();
-      const report = generatePayrollReport(periodStr);
-      if (selectedEmployee === "all") return report.filter(r => companyEmployees.find(ce => ce.id === r.id));
+      const report = generateDeterministicPayroll(companyEmployees, mobileLogs);
+      if (selectedEmployee === "all") return report;
       return report.filter(r => r.id === selectedEmployee);
     }
 
+    // Since we removed fake data generators, other reports will just show empty or basic info
+    // For XPRIZE, the main focus is the agent and payroll deterministic logic.
     if (reportType === "faltas") {
-      const periodStr = getReportSubtitle();
-      return filteredEmployees.map(emp => {
-        const faltas = emp.status === "Activo" ? getDeterministicRandom(emp.id+periodStr+"f", 0, 3) : 0;
-        return {
-          id: emp.id,
-          name: emp.name,
-          department: emp.department,
-          faltasInjustificadas: faltas,
-          faltasJustificadas: emp.status === "Permiso Médico" ? 5 : 0,
-          total: faltas + (emp.status === "Permiso Médico" ? 5 : 0)
-        };
-      }).filter(e => e.total > 0 || selectedEmployee !== "all");
+      return filteredEmployees.map(emp => ({
+        id: emp.id,
+        name: emp.name,
+        department: emp.department,
+        faltasInjustificadas: 0, // Requires real attendance backend
+        faltasJustificadas: 0,
+        total: 0
+      })).filter(e => selectedEmployee !== "all" || true);
     }
 
     if (reportType === "atrasos") {
-      const periodStr = getReportSubtitle();
-      return filteredEmployees.map(emp => {
-        const atrasos = emp.status === "Activo" ? getDeterministicRandom(emp.id+periodStr+"a", 0, 5) : 0;
-        const minutos = atrasos * getDeterministicRandom(emp.id+periodStr+"m", 5, 20);
-        return {
-          id: emp.id,
-          name: emp.name,
-          department: emp.department,
-          cantidadAtrasos: atrasos,
-          minutosTotales: minutos
-        };
-      }).filter(e => e.cantidadAtrasos > 0 || selectedEmployee !== "all");
+      return filteredEmployees.map(emp => ({
+        id: emp.id,
+        name: emp.name,
+        department: emp.department,
+        cantidadAtrasos: 0, // Requires real attendance backend
+        minutosTotales: 0
+      })).filter(e => selectedEmployee !== "all" || true);
     }
 
     if (reportType === "consolidado") {
@@ -132,8 +123,8 @@ function ReportsContent() {
         id: emp.id,
         name: emp.name,
         status: emp.status,
-        diasTrabajados: emp.status === "Activo" ? 30 : (emp.status === "Liquidado" ? 0 : 15),
-        novedades: emp.status !== "Activo" ? emp.status : "Ninguna"
+        diasTrabajados: 0,
+        novedades: "Ninguna"
       }));
     }
 
