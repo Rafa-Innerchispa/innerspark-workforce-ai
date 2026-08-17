@@ -1,32 +1,53 @@
-# InnerSpark Workforce AI - DevPost Submission Context
+# InnerSpark Workforce AI — Devpost Submission Context
 
-This document is intended for AI Assistants (like GitHub Copilot, Gemini, Cursor, or other agents) and developers working on the final submission for the DevPost hackathon.
+This file is a compact handoff for AI assistants and developers working on the Build with Gemini XPRIZE submission. For the canonical recovery instructions and current architecture, read `PROJECT_CONTEXT.md` first.
 
-## Current Project State (As of Last Update)
-The application has successfully integrated Google Gemini AI and several core features of the MVP:
+## Current Project State
 
-1. **Gemini AI Integration (`/api/agent/route.ts`)**:
-   - The system is using `@google/genai` to perform intelligent function calling.
-   - It acts as an autonomous assistant for HR managers (known as "FEMAR Agent" or "InnerSpark Agent").
-   - It has direct access to read employees, calculate prepayroll, and check mobile check-ins.
-   - The AI API key is injected via environment variables (`GEMINI_API_KEY`) and securely queried server-side.
-   - We implemented a **Fallback Mode** (Modo Básico) that provides standard navigation answers if the Gemini API fails or exceeds quotas.
-   - Chat history is persisted locally using `localStorage` on the frontend (`AgentCommandBar.tsx`).
+The application integrates Google Gemini AI and the core Workforce AI product features:
 
-2. **Mobile Check-in System (`/mobile/page.tsx`)**:
-   - Implements advanced georeferenced attendance tracking.
-   - Captures photos (Liveness Biométrico) and exact GPS coordinates (Lat/Lng).
-   - Photos are securely stored in a private Google Cloud Storage bucket (`innerspark-workforce-ai-photos`).
-   - The Admin Dashboard (`/reports/page.tsx`) uses Nominatim OpenStreetMap API to do reverse geocoding and convert coordinates into exact street addresses dynamically.
+1. **Gemini AI Integration (`/api/agent/route.ts`)**
+   - Uses `@google/genai` and Gemini 2.5 Flash for server-side Function Calling.
+   - The Workforce Agent can select authorized business functions such as employee lookup and pre-payroll analysis.
+   - `GEMINI_API_KEY` must remain an environment secret and must never be committed.
+   - Core workforce functionality has a basic fallback path when Gemini is unavailable or quota/API errors occur.
+   - Chat history is persisted locally on the frontend for continuity of the user experience.
 
-3. **Multi-Tenant / Company Architecture**:
-   - System isolates data based on `companyId` (`femar`, `pcdoctor`, `iapro`).
-   - Logging in as `1111111111` gives FEMAR Admin access (with demo data).
-   - Logging in as `0950626317` (Andrés Ramos) gives IA Pro access (starts with 0 employees, as requested).
+2. **Mobile Check-in**
+   - Remote attendance with GPS coordinates and photographic evidence.
+   - Photos are designed to be stored in a private Google Cloud Storage bucket.
+   - Authorized reporting views can use reverse geocoding to convert coordinates into readable locations.
 
-## Next Steps for DevPost Submission
-- **Demo Video**: The user needs to record the video showing the Mobile Checkin, the AI Payroll Calculation, and the Multi-tenant login.
-- **Documentation**: Finalize the DevPost prompt, emphasizing the impact of Gemini Function Calling on automating tedious HR tasks like payroll and anomaly detection.
-- **Architecture Diagram**: Ensure the user includes how the frontend interacts with the serverless Next.js API, which then communicates with Firestore and Gemini API.
+3. **Multi-Tenant SaaS Architecture**
+   - Production/business contexts include PC Doctor, IA Pro and FEMAR-related work.
+   - Customer PII and credentials belong only in private data/auth systems, never in public source or public evidence.
+   - Server-side authorization must verify tenant membership before exposing data or executing Gemini tools.
 
-**Instructions for other AIs**: When assisting the user from now on, refer to this document to understand that the Gemini integration is fully functional, deployed on Google Cloud Run, and ready for showcase. Focus entirely on helping the user write the pitch, polish UI details, or prepare the submission text.
+4. **Business Validation**
+   - IA Pro is an invoiced and paid B2B customer for implementation plus recurring service.
+   - PC Doctor is an operating/internal validation environment and commercial operator.
+   - FEMAR is an active commercial opportunity combining access-control infrastructure with the complementary Workforce AI layer.
+
+## XPRIZE Submission Priorities
+
+- Finalize production-safe authentication and tenant isolation.
+- Verify Gemini Function Calling against authorized tenant data.
+- Run build/tests/secret scan and verify the deployed Google Cloud revision.
+- Package Google Cloud billing, Gemini observability and agent execution evidence.
+- Package revenue/customer evidence and simple P&L.
+- Record a <=3 minute demo showing AI live in production and executing a meaningful workforce workflow.
+
+## Fresh-session Instructions
+
+When opening a new Antigravity/Codex/IDE session:
+
+1. Treat GitHub `Rafa-Innerchispa/innerspark-workforce-ai` as the source of truth.
+2. Pull the latest `main` before making changes.
+3. Read `PROJECT_CONTEXT.md` and this file.
+4. Inspect recent commits before assuming a feature is missing.
+5. Do not rebuild from a stale local workspace.
+6. Do not commit credentials, national identity numbers, customer PII, private photos, tokens or secrets.
+7. Push focused commits back to GitHub so the next session can recover from any machine.
+8. Verify the corresponding Google Cloud deployment after code changes.
+
+The project is a real commercial product, not a hackathon-only demo. Preserve production stability while preparing the XPRIZE submission.
