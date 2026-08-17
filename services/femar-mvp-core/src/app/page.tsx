@@ -1,100 +1,193 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { Users, FileBarChart, MonitorSmartphone, Clock } from "lucide-react";
+import React, { useState } from "react";
+import AgentCommandBar from "@/components/AgentCommandBar";
+import GlassWidget from "@/components/GlassWidget";
+import ExcelUploader from "@/components/ExcelUploader";
+import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEmployees } from "@/hooks/useEmployees";
+import { AlertCircle, CheckCircle2, Clock, FileSpreadsheet, Fingerprint, MonitorSmartphone, TrendingUp } from "lucide-react";
 
 export default function Home() {
+  const { t, language } = useI18n();
   const { activeCompanyId, user } = useAuth();
-  const { employees, loadingEmployees, employeeError } = useEmployees(activeCompanyId);
-  const totalPayroll = employees.reduce((sum, emp) => sum + (Number(emp.baseSalary) || 0), 0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [devices, setDevices] = useState<any[]>([]);
+  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+  const { employees: companyEmployees } = useEmployees(activeCompanyId);
+
+  const hasModule = (moduleName: string) => {
+    if (user?.role === "superadmin") return true;
+    return user?.modules?.includes(moduleName) || false;
+  };
+
+  React.useEffect(() => {
+    const fetchLiveData = async () => {
+      try {
+        const [devicesRes, admsRes, mobileRes] = await Promise.all([
+          fetch("/api/devices", { cache: "no-store" }),
+          fetch("/api/logs/realtime", { cache: "no-store" }),
+          fetch("/api/mobile/logs", { cache: "no-store" }),
+        ]);
+
+        if (devicesRes.ok) {
+          const data = await devicesRes.json();
+          setDevices(data.active || []);
+        }
+
+        const admsData = admsRes.ok ? await admsRes.json() : { logs: [] };
+        const mobileData = mobileRes.ok ? await mobileRes.json() : { logs: [] };
+        const employeeIds = new Set(companyEmployees.map((emp) => emp.id));
+        const logs = [
+          ...(admsData.logs || []).map((log: any) => ({ ...log, source: "ZKTECO" })),
+          ...(mobileData.logs || []).map((log: any) => ({ ...log, source: "MOBILE" })),
+        ]
+          .filter((log: any) => !employeeIds.size || employeeIds.has(log.user_id) || log.companyId === activeCompanyId)
+          .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 12);
+        setAttendanceLogs(logs);
+      } catch (err) {
+        console.error("Error fetching live workforce data:", err);
+      }
+    };
+
+    fetchLiveData();
+    const interval = setInterval(fetchLiveData, 5000);
+    return () => clearInterval(interval);
+  }, [activeCompanyId, companyEmployees]);
+
+  const handleAgentCommand = (command: string) => {
+    setIsProcessing(true);
+    setTimeout(() => {
+      console.log("Agent command executed:", command);
+      setIsProcessing(false);
+    }, 800);
+  };
+
+  const copy = {
+    title: language === "es" ? "Centro de Control FEMAR" : "FEMAR Command Center",
+    subtitle: language === "es" ? "Asistencia, reportes, prenomina y agente Gemini" : "Attendance, reports, pre-payroll, and Gemini agent",
+    liveMarks: language === "es" ? "Marcaciones en Vivo" : "Live Attendance",
+    noMarks: language === "es" ? "No hay marcaciones recientes para esta empresa." : "No recent attendance events for this company.",
+    sync: language === "es" ? "Forzar Sincronización" : "Force Sync",
+    deviceTitle: language === "es" ? "Dispositivos Biométricos ADMS" : "ADMS Biometric Devices",
+    date: language === "es" ? "Fecha / Hora" : "Date / Time",
+    employee: language === "es" ? "Empleado" : "Employee",
+    source: language === "es" ? "Origen" : "Source",
+    status: language === "es" ? "Estado" : "Status",
+    in: language === "es" ? "Entrada" : "Check-in",
+    out: language === "es" ? "Salida" : "Check-out",
+    mark: language === "es" ? "Marcación" : "Attendance",
+  };
 
   return (
     <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl md:text-4xl font-bold text-white">Workforce Control</h1>
-        <p className="text-sm md:text-base text-zinc-400">
-          {user?.name || "Usuario"} - {(activeCompanyId || "femar").toUpperCase()}
-        </p>
+        <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+          {copy.title}
+        </h1>
+        <p className="text-sm md:text-base text-zinc-400">{copy.subtitle}</p>
       </div>
 
-      {employeeError && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">
-          No se pudieron cargar empleados: {employeeError}
-        </div>
-      )}
+      <div className="w-full">
+        <AgentCommandBar onCommand={handleAgentCommand} isProcessing={isProcessing} />
+      </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <div className="flex items-center gap-3 text-zinc-400 mb-3">
-            <Users className="w-5 h-5 text-blue-400" />
-            <span>Empleados</span>
-          </div>
-          <div className="text-4xl font-bold text-white">{loadingEmployees ? "..." : employees.length}</div>
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <div className="flex items-center gap-3 text-zinc-400 mb-3">
-            <FileBarChart className="w-5 h-5 text-emerald-400" />
-            <span>Base salarial</span>
-          </div>
-          <div className="text-4xl font-bold text-white">${totalPayroll.toLocaleString()}</div>
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <div className="flex items-center gap-3 text-zinc-400 mb-3">
-            <Clock className="w-5 h-5 text-amber-400" />
-            <span>Estado</span>
-          </div>
-          <div className="text-2xl font-bold text-white">Operativo</div>
-        </div>
-      </section>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 mt-4">
+        <div className="lg:col-span-2 flex flex-col gap-6 md:gap-8">
+          {hasModule("hardware") && (
+            <GlassWidget title={t("hardware")} icon={MonitorSmartphone}>
+              <div className="flex justify-between items-center mb-4 border-b border-zinc-800 pb-2 px-2">
+                <span className="text-xs text-zinc-400">{copy.deviceTitle}</span>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/sync-test");
+                      const data = await res.json();
+                      alert(data.success ? `Sync started: ${data.queued} queued commands.` : `Error: ${data.message || "Sync failed"}`);
+                    } catch {
+                      alert("Connection error while syncing.");
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs transition-colors"
+                >
+                  {copy.sync}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {devices.length === 0 ? (
+                  <div className="text-zinc-500 text-sm p-4 text-center col-span-full">No active devices connected</div>
+                ) : devices.map((device) => {
+                  const isOnline = device.lastSync && new Date().getTime() - new Date(device.lastSync).getTime() < 300000;
+                  return (
+                    <div key={device.id} className="p-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 flex flex-col gap-2 relative overflow-hidden">
+                      <div className={`absolute top-0 right-0 w-2 h-full ${isOnline ? "bg-green-500" : "bg-red-500"}`} />
+                      <h4 className="font-semibold text-sm text-zinc-200 pr-4">SN: {device.id}</h4>
+                      <p className="text-xs text-zinc-500">IP: {device.ip || "N/A"}</p>
+                      <span className={`text-xs font-medium flex items-center gap-1 ${isOnline ? "text-green-400" : "text-red-400"}`}>
+                        {isOnline ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                        {isOnline ? t("online") : t("offline")}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </GlassWidget>
+          )}
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/people" className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5 hover:border-blue-500/60 transition-colors">
-          <Users className="w-6 h-6 text-blue-400 mb-3" />
-          <h2 className="text-xl font-semibold text-white mb-1">Personal</h2>
-          <p className="text-sm text-zinc-400">Ver y editar empleados.</p>
-        </Link>
-        <Link href="/reports" className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5 hover:border-blue-500/60 transition-colors">
-          <FileBarChart className="w-6 h-6 text-emerald-400 mb-3" />
-          <h2 className="text-xl font-semibold text-white mb-1">Reportes</h2>
-          <p className="text-sm text-zinc-400">Prenomina, asistencia y marcaciones.</p>
-        </Link>
-        <Link href="/devices" className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5 hover:border-blue-500/60 transition-colors">
-          <MonitorSmartphone className="w-6 h-6 text-purple-400 mb-3" />
-          <h2 className="text-xl font-semibold text-white mb-1">Dispositivos</h2>
-          <p className="text-sm text-zinc-400">Relojes biometricos y sincronizacion.</p>
-        </Link>
-      </section>
+          <GlassWidget title={copy.liveMarks} icon={Fingerprint}>
+            <div className="p-0 overflow-x-auto">
+              <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
+                <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
+                  <tr>
+                    <th className="px-4 py-3">{copy.date}</th>
+                    <th className="px-4 py-3">{copy.employee}</th>
+                    <th className="px-4 py-3">{copy.source}</th>
+                    <th className="px-4 py-3">{copy.status}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/50">
+                  {attendanceLogs.length === 0 ? (
+                    <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-500">{copy.noMarks}</td></tr>
+                  ) : attendanceLogs.map((log: any) => {
+                    const emp = companyEmployees.find((item) => item.id === log.user_id);
+                    const state = String(log.state ?? "");
+                    const label = state === "0" ? copy.in : state === "1" ? copy.out : copy.mark;
+                    return (
+                      <tr key={log.id || `${log.user_id}-${log.timestamp}`} className="hover:bg-zinc-800/40">
+                        <td className="px-4 py-3 text-blue-400">{new Date(log.timestamp).toLocaleString(language === "es" ? "es-EC" : "en-US")}</td>
+                        <td className="px-4 py-3 text-white">{emp?.name || log.user_id || "Mobile user"}</td>
+                        <td className="px-4 py-3">{log.source}</td>
+                        <td className="px-4 py-3">{label}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </GlassWidget>
+        </div>
 
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/70 overflow-hidden">
-        <div className="p-4 border-b border-zinc-800">
-          <h2 className="text-lg font-semibold text-white">Empleados recientes</h2>
+        <div className="flex flex-col gap-6 md:gap-8">
+          {hasModule("payroll") && (
+            <GlassWidget title={t("payroll")} icon={TrendingUp}>
+              <div className="flex flex-col items-center justify-center py-6">
+                <div className="text-3xl md:text-5xl font-bold text-white mb-2 text-glow">
+                  ${companyEmployees.reduce((sum, emp) => sum + (Number(emp.baseSalary) || 0), 0).toLocaleString()}
+                </div>
+                <span className="text-xs md:text-sm text-zinc-400">Gross estimate ({companyEmployees.length} employees)</span>
+              </div>
+            </GlassWidget>
+          )}
+
+          {hasModule("upload") && (
+            <GlassWidget title={t("upload")} icon={FileSpreadsheet}>
+              <ExcelUploader onDataLoaded={(data) => console.log("Excel data loaded:", data)} />
+            </GlassWidget>
+          )}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-zinc-400 bg-zinc-950/50">
-              <tr>
-                <th className="px-4 py-3">Nombre</th>
-                <th className="px-4 py-3">Departamento</th>
-                <th className="px-4 py-3">Cargo</th>
-                <th className="px-4 py-3">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.slice(0, 10).map((emp) => (
-                <tr key={emp.id} className="border-t border-zinc-800 text-zinc-300">
-                  <td className="px-4 py-3 text-white">{emp.name}</td>
-                  <td className="px-4 py-3">{emp.department}</td>
-                  <td className="px-4 py-3">{emp.role}</td>
-                  <td className="px-4 py-3">{emp.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      </div>
     </main>
   );
 }

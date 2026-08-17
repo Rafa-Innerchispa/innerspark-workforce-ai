@@ -19,9 +19,9 @@ export default function Sidebar() {
     { icon: Clock, label: t("schedules"), href: "/schedules", roles: ['admin', 'superadmin'] },
     { icon: MonitorSmartphone, label: t("devices"), href: "/devices", roles: ['admin', 'superadmin'] },
     { icon: FileBarChart, label: t("reports"), href: "/reports", roles: ['admin', 'superadmin'] },
-    { icon: UserCheck, label: "Aprobaciones", href: "/approvals", roles: ['superadmin'] },
-    { icon: Smartphone, label: t("mobile_checkin") || "Marcación Remota", href: "/mobile", roles: ['admin', 'superadmin', 'employee'] },
-    { icon: HelpCircle, label: t("help") || "Ayuda / Manual", href: "/help", roles: ['admin', 'superadmin'] },
+    { icon: UserCheck, label: t("approvals"), href: "/approvals", roles: ['superadmin'] },
+    { icon: Smartphone, label: t("mobile_checkin"), href: "/mobile", roles: ['admin', 'superadmin', 'employee'] },
+    { icon: HelpCircle, label: t("help"), href: "/help", roles: ['admin', 'superadmin'] },
   ];
 
   // Filter based on user role
@@ -48,7 +48,7 @@ export default function Sidebar() {
         {user?.role === 'superadmin' && (
           <div className="px-4 pb-4">
             <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 px-1">
-              Empresa Activa
+              {t("active_company")}
             </label>
             <div className="relative">
               <Building2 className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -90,7 +90,7 @@ export default function Sidebar() {
           <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
             <div className="flex items-center gap-2 text-zinc-400">
               <Globe className="w-4 h-4" />
-              <span className="text-xs font-medium">Idioma / Lang</span>
+              <span className="text-xs font-medium">{t("language")}</span>
             </div>
             <button
               onClick={() => setLanguage(language === "es" ? "en" : "es")}
@@ -105,7 +105,7 @@ export default function Sidebar() {
             className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors border border-transparent hover:border-red-500/20"
           >
             <LogOut className="w-4 h-4" />
-            <span className="text-sm font-medium">Cerrar Sesión</span>
+            <span className="text-sm font-medium">{t("logout")}</span>
           </button>
         </div>
       </div>

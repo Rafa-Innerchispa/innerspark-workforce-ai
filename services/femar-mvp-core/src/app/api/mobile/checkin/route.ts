@@ -7,6 +7,8 @@ export async function POST(req: NextRequest) {
   try {
     const data = await req.json();
     const { lat, lng, photo, timestamp } = data;
+    const userId = data.user_id || data.userId || 'mobile-user';
+    const companyId = data.companyId || data.company_id || 'femar';
 
     if (!lat || !lng || !photo) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -36,14 +38,15 @@ export async function POST(req: NextRequest) {
 
     const logRef = db.collection('mobile_logs').doc();
     await logRef.set({
+      user_id: userId,
+      companyId,
       location: { lat, lng },
       photo_url: privatePath,
       timestamp: timestamp || new Date().toISOString(),
+      source: 'MOBILE',
       created_at: new Date().toISOString()
     });
 
-    // Extract user ID from auth context (mocked as 'mobile-user' for MVP if missing)
-    const userId = data.user_id || 'mobile-user';
     processCheckinNovelty(userId, timestamp || new Date().toISOString(), 'MOBILE').catch(e => console.error('Novelty processing error:', e));
 
     return NextResponse.json({ success: true, id: logRef.id });

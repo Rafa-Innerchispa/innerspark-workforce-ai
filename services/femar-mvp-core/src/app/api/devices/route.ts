@@ -11,10 +11,12 @@ export async function GET() {
     
     snapshot.forEach(doc => {
       const data = doc.data();
-      if (data.status === 'pendiente') {
-        pending.push(data);
-      } else if (data.status === 'activo') {
-        active.push(data);
+      const status = String(data.status || '').toLowerCase();
+      const device = { id: doc.id, ...data };
+      if (['pendiente', 'pending'].includes(status)) {
+        pending.push(device);
+      } else if (['activo', 'active', 'aprobado', 'approved'].includes(status)) {
+        active.push(device);
       }
     });
 
