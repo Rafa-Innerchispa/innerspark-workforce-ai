@@ -25,9 +25,29 @@ export default function RegisterPage() {
   };
 
   const validateCedula = (cedula: string) => {
-    // Alphanumeric, at least 5 chars (covers passports, IDs, DEVPOST-JUDGE, etc.)
-    const regex = /^[a-zA-Z0-9\-]+$/;
-    return regex.test(cedula) && cedula.length >= 5;
+    // Special bypass for Hackathon / Super Admins
+    if (cedula === 'DEVPOST-JUDGE') return true;
+
+    // Validate Ecuadorian ID (Modulo 10 algorithm)
+    if (cedula.length !== 10) return false;
+    const digits = cedula.split('').map(Number);
+    if (digits.some(isNaN)) return false;
+    
+    const prov = digits[0] * 10 + digits[1];
+    if (prov < 1 || prov > 24) return false; // Province code 01-24
+    if (digits[2] >= 6) return false; // Third digit must be < 6 for natural persons
+
+    const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+    let total = 0;
+    
+    for (let i = 0; i < 9; i++) {
+      let calc = digits[i] * coefficients[i];
+      if (calc >= 10) calc -= 9;
+      total += calc;
+    }
+    
+    const verifier = (Math.ceil(total / 10) * 10) - total;
+    return verifier === digits[9];
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
