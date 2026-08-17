@@ -1,54 +1,52 @@
-# InnerSpark Workforce AI
+# InnerSpark Workforce AI 🚀
 
-Plataforma de asistencia y pre-nómina, núcleo (backend) para el hackathon NativeBuilder y producto real para FEMAR.
+Plataforma inteligente de gestión de asistencia, control de personal, pre-nómina automatizada y analítica de datos impulsada por inteligencia artificial (Gemini Agent). Desarrollada como solución real de producción para clientes corporativos (incluyendo **PC Doctor**, **FEMAR S.A.** e **IA PRO**) y optimizada para la evaluación del hackathon NativeBuilder / Build with Gemini XPRIZE.
 
-## Alcance del MVP
+---
 
-- **Marcaciones Físicas:** Desde equipos ZKTeco (SenseFace 2A) y Hikvision mediante ADMS/ISAPI.
-- **Marcación Móvil:** Web API con GPS, geocerca y fotografía guardada privadamente en GCS.
-- **Motor de Pre-nómina:** Turnos, atrasos, ausencias, permisos, horas suplementarias y deducciones.
-- **Frontend Natively AI:** La interfaz gráfica principal de la demostración será proporcionada e integrada mediante Natively AI / Native Builder, conservando este repositorio como el *Core Operativo*.
+## 🌟 Características Principales del Producto
 
-## Mapa de Tecnologías (Hackathon)
+### 1. Control de Asistencia y Marcación Multi-Canal
+* **Biométricos ADMS:** Integración directa con equipos de hardware físico ZKTeco (SenseFace 2A) mediante sincronización nativa de comandos e inserción en tiempo real.
+* **Marcación Remota Móvil:** Web App adaptada con geocercas por GPS, verificación de cámara web, y almacenamiento seguro y cifrado en Google Cloud Storage.
 
-| Tecnología | Rol en el Proyecto | Estado / Endpoint |
-|------------|---------------------|-------------------|
-| **Native.builder / Natively AI** | Interfaz gráfica y flujo visual de control de nómina y dashboard de anomalías. | Frontend principal externo. Integración vía API. |
-| **Speechmatics** | Transcripción de audios (justificaciones de voz de supervisores y empleados para novedades). | API listos para invocar en proceso de novedades. |
-| **Bright Data** | *Labor Policy Watch*: monitoreo de regulaciones laborales públicas para alertas contextuales en nómina. | Módulo complementario de contexto normativo. |
-| **AI/ML API** | *Workforce Review Agent*: extracción de entidades, clasificación de anomalías y sugerencias. | Uso local/mock con fallback a API para decisiones complejas. |
-| **Google Cloud Run** | Alojamiento serverless del backend (femar-mvp-core). | En proceso de despliegue / túnel temporal activado. |
-| **Google Firestore** | Base de datos NoSQL para marcaciones, novedades y pre-nóminas. | Implementado y funcional. |
-| **Google Cloud Storage** | Almacenamiento privado de fotografías y evidencias. | Implementado y funcional (URLs privadas gs://). |
+### 2. Validación de Documentos Inteligente y Localizada
+* **Ecuador Modulo 10:** Validación matemática avanzada y estricta para números de cédula ecuatorianos.
+* **Formatos Internacionales / Sandbox:** Soporte nativo para pasaportes, identificaciones alfanuméricas de sandbox y el identificador especial de evaluación `DEVPOST-JUDGE`.
 
-## Conexión de Hardware (ZKTeco / Hikvision)
+### 3. Sincronización de Idioma Global
+* Traducción simultánea unificada (Español / Inglés) integrada en toda la interfaz de usuario (Login, Registro, Selección de Módulos, Dashboard y Menús de Control).
 
-Para conectar los equipos biométricos al backend:
+### 4. Asistente Inteligente Gemini Agent (AI Review)
+* Barra de comandos inteligente con reconocimiento de voz integrado en el dashboard.
+* Capacidad de consultar bases de datos de empleados en tiempo real, calcular nóminas automáticamente, detectar atrasos o novedades, y resolver dudas administrativas mediante procesamiento del lenguaje natural.
 
-### ZKTeco (SenseFace y similares con ADMS)
-Ingresar a *Opciones de Red* > *Configuración de Servidor Cloud (ADMS)*:
-- **Dirección del Servidor:** `https://real-whom-tomatoes-counts.trycloudflare.com/api` (URL del túnel actual) o la IP/dominio de Cloud Run cuando se despliegue definitivamente.
-- **Puerto:** `443`
-El equipo sincronizará automáticamente mediante `/api/iclock/cdata` y `/api/iclock/getrequest`.
+---
 
-### Hikvision (Control de Acceso / Videoportero)
-La integración con Hikvision requiere conectividad ISAPI o configuración de eventos de alarma hacia el endpoint web.
+## 🛠️ Arquitectura y Tecnologías en Producción
 
-## Arquitectura E2E
+El proyecto está diseñado bajo un modelo serverless moderno y de alta escalabilidad en la nube:
 
-```text
-SenseFace (ADMS) ─────┐
-Hikvision (ISAPI) ────┼─> API (Next.js / Cloud Run) ─> Firestore DB
-Móvil (Web App) ──────┘           │
-                                  ├─> Cloud Storage (Fotos)
-Natively AI (Frontend) <──────────┴─> Motor Pre-nómina (IA + Speechmatics)
-```
+* **Backend / API Core (Next.js):** Alojado en **Google Cloud Run** bajo el servicio `femar-mvp-core` en la región `us-central1`.
+* **Base de Datos (Google Firestore):** Persistencia NoSQL segura y en tiempo real para empleados, registros de asistencia, dispositivos y novedades.
+* **Almacenamiento (Google Cloud Storage):** Repositorio privado para almacenar fotos de registro tomadas por los empleados en marcaciones móviles.
+* **Procesamiento de Lenguaje Natural (Gemini AI SDK):** Motor inteligente de análisis y llamadas de función automatizadas.
 
-## Desarrollo y Pruebas
+---
+
+## 📦 Despliegue en la Nube (Google Cloud)
+
+El despliegue está configurado para ejecutarse mediante Google Cloud Build directo a Google Cloud Run, reduciendo el tamaño de transferencia al excluir dependencias pesadas:
+
 ```bash
-# Iniciar backend localmente
-npm run dev
-
-# Para pruebas con equipos físicos temporalmente, usar Cloudflare Tunnel:
-cloudflared tunnel --url http://localhost:3000
+# Comando de Despliegue Oficial en Producción:
+gcloud run deploy femar-mvp-core \
+  --source=. \
+  --region=us-central1 \
+  --project=innerspark-workforce-ai
 ```
+
+---
+
+> [!NOTE]
+> **Afinación de Detalles para Clientes**: Nos encontramos actualmente refinando detalles de experiencia de usuario, seguridad biométrica y sincronización en tiempo real directamente con nuestros clientes activos de PC Doctor y FEMAR para garantizar la máxima estabilidad y performance en entornos reales.
