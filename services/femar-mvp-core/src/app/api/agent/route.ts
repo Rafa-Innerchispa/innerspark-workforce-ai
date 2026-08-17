@@ -92,7 +92,7 @@ Use the available function tools to query real data. Never invent payroll number
       }));
 
     const chat = ai.chats.create({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       config: {
         systemInstruction,
         tools,

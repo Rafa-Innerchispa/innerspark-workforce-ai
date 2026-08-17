@@ -34,7 +34,7 @@ const LocationAddress = ({ lat, lng }: { lat: number; lng: number }) => {
 export const dynamic = "force-dynamic";
 
 function ReportsContent() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const searchParams = useSearchParams();
   const { activeCompanyId } = useAuth();
 
@@ -75,11 +75,13 @@ function ReportsContent() {
   }, [searchParams]);
 
   const getReportSubtitle = () => {
-    if (dateRange === "month") return "Mes Actual";
-    if (dateRange === "last_month") return "Mes Anterior";
-    if (dateRange === "year") return "Año en Curso";
-    if (dateRange === "custom" && customStartDate && customEndDate) return `Del ${customStartDate} al ${customEndDate}`;
-    return "Periodo Personalizado";
+    if (dateRange === "month") return t("opt_month");
+    if (dateRange === "last_month") return t("opt_last_month");
+    if (dateRange === "year") return t("opt_year");
+    if (dateRange === "custom" && customStartDate && customEndDate) {
+      return `${language === "es" ? "Del" : "From"} ${customStartDate} ${language === "es" ? "al" : "to"} ${customEndDate}`;
+    }
+    return t("opt_custom");
   };
 
   const generateReportData = () => {
@@ -111,7 +113,7 @@ function ReportsContent() {
     });
 
     if (reportType === "nomina") {
-      return generateDeterministicPayroll(filteredEmployees, filteredLogs);
+      return generateDeterministicPayroll(filteredEmployees, filteredLogs, dateRange);
     }
 
     if (reportType === "faltas") {
@@ -206,40 +208,40 @@ function ReportsContent() {
     <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-          Generador de Reportes
+          {t("reports_title")}
         </h1>
         <p className="text-sm md:text-base text-zinc-400">
-          Crea analíticas detalladas de asistencia, atrasos, faltas y nómina para tus empleados.
+          {t("reports_desc")}
         </p>
       </div>
 
-      <GlassWidget title="Filtros del Reporte" icon={Filter}>
+      <GlassWidget title={t("reports_filters")} icon={Filter}>
         <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm text-zinc-400 mb-2">Tipo de Reporte</label>
+            <label className="block text-sm text-zinc-400 mb-2">{t("reports_type")}</label>
             <select 
               value={reportType}
               onChange={(e) => setReportType(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
             >
-              <option value="nomina">Rol de Pagos (Sueldos y Descuentos)</option>
-              <option value="faltas">Reporte de Faltas (Ausentismo)</option>
-              <option value="atrasos">Reporte de Atrasos (Minutos tarde)</option>
-              <option value="consolidado">Consolidado General por Persona</option>
-              <option value="mobile_checkins">Marcaciones Móviles (GPS y Fotos)</option>
+              <option value="nomina">{t("opt_nomina")}</option>
+              <option value="faltas">{t("opt_faltas")}</option>
+              <option value="atrasos">{t("opt_atrasos")}</option>
+              <option value="consolidado">{t("opt_consolidado")}</option>
+              <option value="mobile_checkins">{t("opt_mobile_checkins")}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm text-zinc-400 mb-2">Periodo</label>
+            <label className="block text-sm text-zinc-400 mb-2">{t("reports_period")}</label>
             <select 
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
             >
-              <option value="month">Mes Actual</option>
-              <option value="last_month">Mes Anterior</option>
-              <option value="year">Año en curso</option>
-              <option value="custom">Rango Personalizado...</option>
+              <option value="month">{t("opt_month")}</option>
+              <option value="last_month">{t("opt_last_month")}</option>
+              <option value="year">{t("opt_year")}</option>
+              <option value="custom">{t("opt_custom")}</option>
             </select>
             {dateRange === "custom" && (
               <div className="flex gap-2 mt-2">
@@ -259,14 +261,14 @@ function ReportsContent() {
             )}
           </div>
           <div className="relative">
-            <label className="block text-sm text-zinc-400 mb-2">Buscar Empleado</label>
+            <label className="block text-sm text-zinc-400 mb-2">{t("reports_search_emp")}</label>
             <div 
               className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white flex items-center justify-between cursor-text relative z-20"
               onClick={() => setIsEmployeeDropdownOpen(true)}
             >
               <input
                 type="text"
-                placeholder="Escribe el apellido o nombre..."
+                placeholder={t("reports_search_placeholder")}
                 value={employeeSearch}
                 onChange={(e) => {
                   setEmployeeSearch(e.target.value);
@@ -294,7 +296,7 @@ function ReportsContent() {
                       setIsEmployeeDropdownOpen(false);
                     }}
                   >
-                    Todos los Empleados ({companyEmployees.length})
+                    {t("reports_all_employees")} ({companyEmployees.length})
                   </div>
                   {companyEmployees
                     .slice()
@@ -321,7 +323,7 @@ function ReportsContent() {
       </GlassWidget>
 
       <GlassWidget 
-        title={`Vista Previa del Reporte (${getReportSubtitle()})`} 
+        title={`${t("report_preview")} (${getReportSubtitle()})`} 
         icon={FileBarChart}
       >
         <div className="p-0 overflow-x-auto">
@@ -330,46 +332,46 @@ function ReportsContent() {
               <tr>
                 {reportType === "nomina" && (
                   <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">C.I.</th>
-                    <th className="px-6 py-4 font-medium text-right">Sueldo Base</th>
-                    <th className="px-6 py-4 font-medium text-right text-green-400">H. Extras</th>
-                    <th className="px-6 py-4 font-medium text-right text-red-400">IESS</th>
-                    <th className="px-6 py-4 font-medium text-right text-red-400">Multas</th>
-                    <th className="px-6 py-4 font-bold text-right text-blue-400">Líquido a Recibir</th>
+                    <th className="px-6 py-4 font-medium">{t("th_employee")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_ci")}</th>
+                    <th className="px-6 py-4 font-medium text-right">{t("th_base_salary")}</th>
+                    <th className="px-6 py-4 font-medium text-right text-green-400">{t("th_overtime")}</th>
+                    <th className="px-6 py-4 font-medium text-right text-red-400">{t("th_iess")}</th>
+                    <th className="px-6 py-4 font-medium text-right text-red-400">{t("th_penalties")}</th>
+                    <th className="px-6 py-4 font-bold text-right text-blue-400">{t("th_net_payable")}</th>
                   </>
                 )}
                 {reportType === "faltas" && (
                   <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">Departamento</th>
-                    <th className="px-6 py-4 font-medium text-center text-red-400">Faltas Injustificadas</th>
-                    <th className="px-6 py-4 font-medium text-center text-yellow-400">Faltas Justificadas</th>
-                    <th className="px-6 py-4 font-bold text-center">Total Faltas</th>
+                    <th className="px-6 py-4 font-medium">{t("th_employee")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_department")}</th>
+                    <th className="px-6 py-4 font-medium text-center text-red-400">{t("th_unjustified_absences")}</th>
+                    <th className="px-6 py-4 font-medium text-center text-yellow-400">{t("th_justified_absences")}</th>
+                    <th className="px-6 py-4 font-bold text-center">{t("th_total_absences")}</th>
                   </>
                 )}
                 {reportType === "atrasos" && (
                   <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">Departamento</th>
-                    <th className="px-6 py-4 font-medium text-center text-orange-400">Nº de Atrasos</th>
-                    <th className="px-6 py-4 font-medium text-center text-red-400">Minutos Totales Perdidos</th>
+                    <th className="px-6 py-4 font-medium">{t("th_employee")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_department")}</th>
+                    <th className="px-6 py-4 font-medium text-center text-orange-400">{t("th_num_delays")}</th>
+                    <th className="px-6 py-4 font-medium text-center text-red-400">{t("th_total_minutes_lost")}</th>
                   </>
                 )}
                 {reportType === "consolidado" && (
                   <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">C.I.</th>
-                    <th className="px-6 py-4 font-medium text-center">Días Trabajados</th>
-                    <th className="px-6 py-4 font-medium">Estado / Novedades</th>
+                    <th className="px-6 py-4 font-medium">{t("th_employee")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_ci")}</th>
+                    <th className="px-6 py-4 font-medium text-center">{t("th_days_worked")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_status_news")}</th>
                   </>
                 )}
                 {reportType === "mobile_checkins" && (
                   <>
-                    <th className="px-6 py-4 font-medium">Empleado (ID)</th>
-                    <th className="px-6 py-4 font-medium">Fecha y Hora</th>
-                    <th className="px-6 py-4 font-medium">Ubicación GPS</th>
-                    <th className="px-6 py-4 font-medium">Foto (Liveness)</th>
+                    <th className="px-6 py-4 font-medium">{t("th_employee_id")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_date_time")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_gps_location")}</th>
+                    <th className="px-6 py-4 font-medium">{t("th_photo_liveness")}</th>
                   </>
                 )}
               </tr>
@@ -378,7 +380,7 @@ function ReportsContent() {
               {reportData.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">
-                    No hay datos para los filtros seleccionados.
+                    {t("no_data_filters")}
                   </td>
                 </tr>
               ) : (
@@ -431,28 +433,28 @@ function ReportsContent() {
               )}
               {reportType === "mobile_checkins" && (
                 loadingMobileLogs ? (
-                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">Cargando marcaciones y resolviendo imágenes seguras...</td></tr>
+                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">{t("loading_secure_checkins")}</td></tr>
                 ) : mobileLogs.length === 0 ? (
-                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">No hay marcaciones móviles registradas aún.</td></tr>
+                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">{t("no_mobile_checkins_yet")}</td></tr>
                 ) : (
                   mobileLogs.map((log: any, i) => {
-                    const date = new Date(log.timestamp).toLocaleString('es-EC');
+                    const date = new Date(log.timestamp).toLocaleString(language === "es" ? "es-EC" : "en-US");
                     const mapLink = `https://www.google.com/maps?q=${log.location.lat},${log.location.lng}`;
                     const userId = log.user_id === "mobile-user" ? "3333333333" : log.user_id;
                     const employee = companyEmployees.find((e: any) => e.id === userId);
-                    const employeeName = employee ? employee.name : (userId === "3333333333" ? "Empleado Prueba" : "Desconocido");
+                    const employeeName = employee ? employee.name : (userId === "3333333333" ? t("test_employee") : t("unknown"));
 
                     return (
                       <tr key={i} className="hover:bg-zinc-800/40 transition-colors">
                         <td className="px-6 py-4">
                           <span className="font-medium text-zinc-200 block">{employeeName}</span>
-                          <span className="text-xs text-zinc-500 font-normal">C.I. {userId}</span>
+                          <span className="text-xs text-zinc-500 font-normal">{t("th_ci")} {userId}</span>
                         </td>
                         <td className="px-6 py-4 text-zinc-300">{date}</td>
                         <td className="px-6 py-4">
                           <LocationAddress lat={log.location.lat} lng={log.location.lng} />
                           <a href={mapLink} target="_blank" rel="noreferrer" className="text-blue-400 text-xs hover:underline flex items-center gap-1 mt-1">
-                            <MapPin className="w-3 h-3" /> Ver en Google Maps
+                            <MapPin className="w-3 h-3" /> {t("view_on_google_maps")}
                           </a>
                         </td>
                         <td className="px-6 py-4">
@@ -461,7 +463,7 @@ function ReportsContent() {
                               <img src={log.photo_url} alt="Checkin" className="w-12 h-12 rounded-lg object-cover border border-zinc-700 hover:border-blue-500 transition-colors" />
                             </a>
                           ) : (
-                            <span className="text-zinc-500">Sin foto</span>
+                            <span className="text-zinc-500">{t("no_photo")}</span>
                           )}
                         </td>
                       </tr>
@@ -471,7 +473,7 @@ function ReportsContent() {
               )}
               {reportType === "nomina" && totalsNomina && reportData.length > 0 && (
                 <tr className="bg-zinc-800/80 border-t border-zinc-700">
-                  <td className="px-6 py-4 font-bold text-zinc-200" colSpan={2}>TOTALES ({reportData.length} Empleados)</td>
+                  <td className="px-6 py-4 font-bold text-zinc-200" colSpan={2}>{t("totals")} ({reportData.length} {t("employees_count")})</td>
                   <td className="px-6 py-4 text-right font-bold text-zinc-200">${totalsNomina.base.toFixed(2)}</td>
                   <td className="px-6 py-4 text-right font-bold text-green-400/90">+${totalsNomina.overtime.toFixed(2)}</td>
                   <td className="px-6 py-4 text-right font-bold text-red-400/90">-${totalsNomina.iess.toFixed(2)}</td>
@@ -487,19 +489,19 @@ function ReportsContent() {
             onClick={() => window.print()}
             className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl transition-colors font-medium text-sm flex items-center gap-2 border border-zinc-700"
           >
-            <Printer className="w-4 h-4" /> Imprimir
+            <Printer className="w-4 h-4" /> {t("btn_print")}
           </button>
           <button 
             onClick={handleExportExcel}
             className="px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-xl transition-colors font-medium text-sm flex items-center gap-2 border border-green-500/30"
           >
-            <FileSpreadsheet className="w-4 h-4" /> Exportar a Excel
+            <FileSpreadsheet className="w-4 h-4" /> {t("btn_export_excel")}
           </button>
           <button 
             onClick={() => window.print()}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors font-medium text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
           >
-            <Download className="w-4 h-4" /> Descargar PDF
+            <Download className="w-4 h-4" /> {t("btn_download_pdf")}
           </button>
         </div>
       </GlassWidget>
@@ -508,8 +510,9 @@ function ReportsContent() {
 }
 
 export default function ReportsPage() {
+  const { t } = useI18n();
   return (
-    <Suspense fallback={<div className="p-8 text-center text-zinc-500">Cargando reportes...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-zinc-500">{t("loading_reports")}</div>}>
       <ReportsContent />
     </Suspense>
   );
