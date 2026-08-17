@@ -5,14 +5,14 @@ import GlassWidget from "@/components/GlassWidget";
 import { Server, Activity, Plus, ShieldCheck, Search, Wifi, Clock, Fingerprint, Terminal, User } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
+import { useEmployees } from "@/hooks/useEmployees";
 import Link from "next/link";
 
 export default function DevicesPage() {
   const { t } = useI18n();
   const { activeCompanyId } = useAuth();
   
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const { employees: companyEmployees } = useEmployees(activeCompanyId);
   const [pendingDevices, setPendingDevices] = useState<any[]>([]);
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
   const [realtimeLogs, setRealtimeLogs] = useState<any[]>([]);

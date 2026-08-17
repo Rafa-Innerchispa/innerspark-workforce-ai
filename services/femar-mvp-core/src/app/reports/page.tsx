@@ -5,7 +5,7 @@ import GlassWidget from "@/components/GlassWidget";
 import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, User, Clock, AlertTriangle, MapPin } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
+import { useEmployees } from "@/hooks/useEmployees";
 import { generateDeterministicPayroll } from "@/lib/reportUtils";
 import * as XLSX from "xlsx";
 import { useSearchParams } from "next/navigation";
@@ -38,7 +38,7 @@ function ReportsContent() {
   const searchParams = useSearchParams();
   const { activeCompanyId } = useAuth();
 
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const { employees: companyEmployees, loadingEmployees } = useEmployees(activeCompanyId);
 
   const [reportType, setReportType] = useState("nomina"); // nomina, faltas, atrasos, consolidado
   const [selectedEmployee, setSelectedEmployee] = useState("all");
@@ -241,11 +241,11 @@ function ReportsContent() {
                       setIsEmployeeDropdownOpen(false);
                     }}
                   >
-                    Todos los Empleados ({companyEmployees.length})
+                    Todos los Empleados ({loadingEmployees ? "..." : companyEmployees.length})
                   </div>
                   {companyEmployees
                     .slice()
-                    .sort((a,b) => a.firstLastName.localeCompare(b.firstLastName))
+                    .sort((a,b) => (a.firstLastName || a.name || "").localeCompare(b.firstLastName || b.name || ""))
                     .filter(emp => emp.name.toLowerCase().includes(employeeSearch.toLowerCase()) || emp.id.includes(employeeSearch))
                     .map(emp => (
                       <div 
@@ -257,7 +257,7 @@ function ReportsContent() {
                           setIsEmployeeDropdownOpen(false);
                         }}
                       >
-                        {emp.firstLastName} {emp.secondLastName} {emp.firstName} {emp.secondName}
+                        {emp.firstLastName || ""} {emp.secondLastName || ""} {emp.firstName || emp.name} {emp.secondName || ""}
                       </div>
                   ))}
                 </div>

@@ -5,37 +5,13 @@ import GlassWidget from "@/components/GlassWidget";
 import { Users, User, Phone, Mail, MapPin, Plus, Edit2, X, Save, ShieldCheck, Search, Loader2 } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
+import { useEmployees } from "@/hooks/useEmployees";
 
 export default function PeoplePage() {
   const { t } = useI18n();
   const { activeCompanyId } = useAuth();
 
-  const [employees, setEmployees] = useState<any[]>(
-    activeCompanyId === 'femar' 
-      ? mockEmployees.filter(e => e.companyId === activeCompanyId) 
-      : []
-  );
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
-
-  React.useEffect(() => {
-    const fetchEmps = async () => {
-      try {
-        const res = await fetch('/api/employees');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.employees && data.employees.length > 0) {
-             setEmployees(data.employees);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching employees:", err);
-      } finally {
-        setLoadingEmployees(false);
-      }
-    };
-    fetchEmps();
-  }, []);
+  const { employees, setEmployees, loadingEmployees, employeeError } = useEmployees(activeCompanyId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
@@ -169,6 +145,7 @@ export default function PeoplePage() {
 
     const empData = {
       id: formId,
+      companyId: activeCompanyId,
       firstName: formFirstName,
       secondName: formSecondName,
       firstLastName: formFirstLastName,
@@ -232,7 +209,22 @@ export default function PeoplePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {Object.entries(departmentsMap).map(([dept, count]) => (
+        {loadingEmployees && (
+          <GlassWidget title="Cargando personal" icon={Users}>
+            <div className="p-8 text-center text-zinc-500">Cargando empleados desde Firestore...</div>
+          </GlassWidget>
+        )}
+        {employeeError && (
+          <GlassWidget title="Error de datos" icon={Users}>
+            <div className="p-8 text-center text-red-400">{employeeError}</div>
+          </GlassWidget>
+        )}
+        {!loadingEmployees && !employeeError && Object.entries(departmentsMap).length === 0 && (
+          <GlassWidget title="Sin empleados" icon={Users}>
+            <div className="p-8 text-center text-zinc-500">No hay empleados registrados para esta empresa.</div>
+          </GlassWidget>
+        )}
+        {!loadingEmployees && !employeeError && Object.entries(departmentsMap).map(([dept, count]) => (
           <GlassWidget key={dept} title={`${dept} (${count} empleados)`} icon={Users}>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-4">
               {employees.filter(e => e.department === dept).map((employee) => (

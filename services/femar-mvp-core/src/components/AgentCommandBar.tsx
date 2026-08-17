@@ -72,27 +72,18 @@ export default function AgentCommandBar({ onCommand, isProcessing }: AgentComman
             { id: (Date.now() + 1).toString(), role: "model", text: data.text }
           ]);
         } else {
-          // Fallback router if API fails
-          let fallbackText = "Lo siento, mi conexión con Inteligencia Artificial está caída en este momento. Sin embargo, en mi modo básico te informo que puedes usar el panel de Reportes para ver esta información.";
-          
-          const lowerCmd = userMessage.toLowerCase();
-          if (lowerCmd.includes("empleado")) {
-            fallbackText = "Modo Básico: Tienes empleados registrados en el sistema. Por favor ve al módulo de Personal para el detalle exacto.";
-          } else if (lowerCmd.includes("nomina") || lowerCmd.includes("pagos") || lowerCmd.includes("calcul")) {
-            fallbackText = "Modo Básico: Para calcular la nómina sin IA, dirígete a la pestaña 'Reportes' y selecciona 'Rol de Pagos'.";
-          } else if (lowerCmd.includes("atraso") || lowerCmd.includes("falta")) {
-            fallbackText = "Modo Básico: Puedes consultar las faltas y atrasos manualmente en la pestaña de Reportes.";
-          }
+          const data = await response.json().catch(() => ({}));
+          const errorText = data.error || "La conexión con Gemini falló. Revisa el log del servidor para el detalle exacto.";
 
           setMessages(prev => [
             ...prev,
-            { id: (Date.now() + 1).toString(), role: "model", text: fallbackText }
+            { id: (Date.now() + 1).toString(), role: "model", text: errorText }
           ]);
         }
       } catch (error) {
         setMessages(prev => [
           ...prev,
-          { id: (Date.now() + 1).toString(), role: "model", text: "Modo Básico Activado: No tengo conexión a internet o a Gemini. Usa los menús de la izquierda para navegar." }
+          { id: (Date.now() + 1).toString(), role: "model", text: "No se pudo contactar al agente. Revisa conectividad y logs del servidor." }
         ]);
       } finally {
         setLoading(false);

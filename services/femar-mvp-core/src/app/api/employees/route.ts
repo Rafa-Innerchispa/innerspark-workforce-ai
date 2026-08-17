@@ -5,14 +5,15 @@ export async function POST(req: NextRequest) {
   try {
     const employeeData = await req.json();
     
-    if (!employeeData.id || !employeeData.name) {
-      return NextResponse.json({ error: 'ID and Name are required' }, { status: 400 });
+    if (!employeeData.id || !employeeData.name || !employeeData.companyId) {
+      return NextResponse.json({ error: 'ID, Name, and Company are required' }, { status: 400 });
     }
 
     // Save or update employee in Firestore
     const empRef = db.collection('employees').doc(employeeData.id);
     await empRef.set({
       ...employeeData,
+      id: employeeData.id,
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
     }
     
     const snapshot = await query.get();
-    const employees = snapshot.docs.map(doc => ({ ...doc.data() }));
+    const employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     return NextResponse.json({ employees });
   } catch (error) {
     console.error('Error fetching employees:', error);

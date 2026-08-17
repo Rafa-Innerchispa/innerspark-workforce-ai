@@ -7,7 +7,7 @@ import ExcelUploader from "@/components/ExcelUploader";
 import TagsSalesWidget from "@/components/TagsSalesWidget";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
+import { useEmployees } from "@/hooks/useEmployees";
 import { AlertCircle, Clock, CheckCircle2, TrendingUp, MonitorSmartphone, FileSpreadsheet } from "lucide-react";
 
 export default function Home() {
@@ -21,8 +21,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
 
-  // Multi-tenant filter
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const { employees: companyEmployees } = useEmployees(activeCompanyId);
 
   React.useEffect(() => {
     const fetchDevices = async () => {

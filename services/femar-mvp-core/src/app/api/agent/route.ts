@@ -4,7 +4,35 @@ import { db } from '@/lib/firebase';
 import { generateDeterministicPayroll } from '@/lib/reportUtils';
 import { cookies } from 'next/headers';
 
+async function getCompanyEmployees(companyId: string) {
+  const snapshot = await db.collection('employees').where('companyId', '==', companyId).get();
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function getCompanyAttendanceLogs(companyId: string, employeeIds: Set<string>) {
+  const admsSnapshot = await db.collection('adms_logs')
+    .orderBy('timestamp', 'desc')
+    .limit(500)
+    .get();
+  const mobileSnapshot = await db.collection('mobile_logs')
+    .orderBy('timestamp', 'desc')
+    .limit(500)
+    .get();
+
+  const admsLogs = admsSnapshot.docs
+    .map(d => ({ id: d.id, source: 'ZKTECO', ...d.data() }))
+    .filter((log: any) => employeeIds.has(log.user_id));
+
+  const mobileLogs = mobileSnapshot.docs
+    .map(d => ({ id: d.id, source: 'MOBILE', ...d.data() }))
+    .filter((log: any) => employeeIds.has(log.user_id));
+
+  return [...admsLogs, ...mobileLogs]
+    .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
 export async function POST(req: Request) {
+  const startedAt = Date.now();
   try {
     const { prompt, history = [], companyId: clientCompanyId, language = 'en' } = await req.json();
 
@@ -51,8 +79,14 @@ export async function POST(req: Request) {
       parameters: { type: Type.OBJECT, properties: {} }
     };
 
-    const calculatePayrollDeclaration: FunctionDeclaration = {
-      name: 'calculate_payroll',
+    const getClientsDeclaration: FunctionDeclaration = {
+      name: 'get_clients',
+      description: 'Cuenta usuarios/clientes y solicitudes pendientes de la empresa autorizada',
+      parameters: { type: Type.OBJECT, properties: {} }
+    };
+
+    const calculatePrePayrollDeclaration: FunctionDeclaration = {
+      name: 'calculate_prepayroll',
       description: 'Calcula y devuelve el resumen de la pre-nómina del mes actual para la empresa',
       parameters: { type: Type.OBJECT, properties: {} }
     };
@@ -63,8 +97,20 @@ export async function POST(req: Request) {
       parameters: { type: Type.OBJECT, properties: {} }
     };
 
+    const getAttendanceSummaryDeclaration: FunctionDeclaration = {
+      name: 'get_attendance_summary',
+      description: 'Resume marcaciones biométricas y móviles recientes por empleado usando los mismos datos que reportes',
+      parameters: { type: Type.OBJECT, properties: {} }
+    };
+
     const tools = [{
-      functionDeclarations: [getEmployeesDeclaration, calculatePayrollDeclaration, getAnomaliesDeclaration]
+      functionDeclarations: [
+        getEmployeesDeclaration,
+        getClientsDeclaration,
+        calculatePrePayrollDeclaration,
+        getAnomaliesDeclaration,
+        getAttendanceSummaryDeclaration
+      ]
     }];
 
     const systemInstruction = `You are an expert AI assistant named 'Workforce Agent' for the 'InnerSpark Workforce AI' platform.
@@ -78,10 +124,16 @@ SECURITY GUARDRAILS:
 Use the available function tools to query real data. Never invent payroll numbers or anomaly logs.`;
 
     // Process chat history to match genai format
-    const formattedHistory = history.map((msg: any) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-    }));
+    const formattedHistory = history
+      .map((msg: any) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        text: typeof msg.text === 'string' ? msg.text : msg.content
+      }))
+      .filter((msg: any) => typeof msg.text === 'string' && msg.text.trim().length > 0)
+      .map((msg: any) => ({
+        role: msg.role,
+        parts: [{ text: msg.text }]
+      }));
 
     const chat = ai.chats.create({
       model: 'gemini-2.5-flash',
@@ -102,22 +154,33 @@ Use the available function tools to query real data. Never invent payroll number
         let toolResult = null;
         
         if (call.name === 'get_employees') {
-          const snapshot = await db.collection('employees').where('companyId', '==', companyId).get();
-          toolResult = { total_employees: snapshot.size, employees: snapshot.docs.map(d => ({ id: d.id, name: d.data().name, position: d.data().position })) };
-        } else if (call.name === 'calculate_payroll') {
-          // Fetch employees
-          const empSnapshot = await db.collection('employees').where('companyId', '==', companyId).get();
-          let employees = empSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Fetch this month logs
+          const employees = await getCompanyEmployees(companyId);
+          toolResult = {
+            total_employees: employees.length,
+            employees: employees.map((emp: any) => ({
+              id: emp.id,
+              name: emp.name,
+              department: emp.department,
+              role: emp.role,
+              status: emp.status
+            }))
+          };
+        } else if (call.name === 'get_clients') {
+          const usersSnapshot = await db.collection('users').where('companyId', '==', companyId).get();
+          const users = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          toolResult = {
+            total_clients: users.length,
+            approved: users.filter((u: any) => u.status === 'APPROVED').length,
+            pending: users.filter((u: any) => u.status === 'PENDING').length,
+            rejected: users.filter((u: any) => u.status === 'REJECTED').length
+          };
+        } else if (call.name === 'calculate_prepayroll') {
+          const employees = await getCompanyEmployees(companyId);
+          const empIds = new Set(employees.map((e: any) => e.id));
+          const allLogs = await getCompanyAttendanceLogs(companyId, empIds);
           const now = new Date();
           const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-          const logsSnapshot = await db.collection('realtime_logs')
-            .where('timestamp', '>=', firstDay)
-            .get();
-            
-          // Filter logs for this company (since realtimelogs don't have companyId directly, filter by emp match)
-          const empIds = new Set(employees.map(e => e.id));
-          const companyLogs = logsSnapshot.docs.map(d => d.data()).filter(log => empIds.has(log.user_id));
+          const companyLogs = allLogs.filter((log: any) => log.timestamp >= firstDay);
           
           const payroll = generateDeterministicPayroll(employees, companyLogs);
           
@@ -133,17 +196,41 @@ Use the available function tools to query real data. Never invent payroll number
           };
         }
         else if (call.name === 'get_anomalies') {
-          // Real-time calculation based on logs (No dummies allowed)
-          // For XPRIZE, we ensure anomalies are derived from real attendance delays.
+          const employees = await getCompanyEmployees(companyId);
+          const empIds = new Set(employees.map((e: any) => e.id));
+          const today = new Date().toISOString().slice(0, 10);
+          const logs = (await getCompanyAttendanceLogs(companyId, empIds))
+            .filter((log: any) => String(log.timestamp || '').startsWith(today));
+
           toolResult = {
-            date: new Date().toISOString().split('T')[0],
-            late_arrivals: [], // Logic shifted to rely purely on true data.
-            missing_checkouts: []
+            date: today,
+            attendance_events: logs.length,
+            employees_with_events: new Set(logs.map((log: any) => log.user_id)).size,
+            missing_checkouts: employees
+              .filter((emp: any) => {
+                const empLogs = logs.filter((log: any) => log.user_id === emp.id);
+                return empLogs.some((log: any) => String(log.state) === '0') && !empLogs.some((log: any) => String(log.state) === '1');
+              })
+              .map((emp: any) => ({ id: emp.id, name: emp.name }))
+          };
+        } else if (call.name === 'get_attendance_summary') {
+          const employees = await getCompanyEmployees(companyId);
+          const empIds = new Set(employees.map((e: any) => e.id));
+          const logs = await getCompanyAttendanceLogs(companyId, empIds);
+          toolResult = {
+            total_events_loaded: logs.length,
+            employees_with_events: new Set(logs.map((log: any) => log.user_id)).size,
+            latest_events: logs.slice(0, 20).map((log: any) => ({
+              user_id: log.user_id,
+              source: log.source,
+              timestamp: log.timestamp,
+              state: log.state
+            }))
           };
         }
 
         // P0 XPRIZE Evidencia: Structured Logging
-        const durationMs = Math.floor(Math.random() * 500) + 300; // Simulated latency log
+        const durationMs = Date.now() - startedAt;
         console.log(JSON.stringify({
           event: "gemini_function_call",
           model: "gemini-2.5-flash",

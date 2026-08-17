@@ -3,13 +3,16 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserPlus, AlertCircle, Languages } from 'lucide-react';
+import { DocumentCountry, DocumentType, validateNationalDocument } from '@/lib/documentValidation';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     cedula: '',
     name: '',
     password: '',
-    companyId: 'innerspark_labs'
+    companyId: 'innerspark_labs',
+    country: 'OTHER' as DocumentCountry,
+    documentType: 'employee_id' as DocumentType
   });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -24,32 +27,6 @@ export default function RegisterPage() {
     return words.length >= 2;
   };
 
-  const validateCedula = (cedula: string) => {
-    // Special bypass for Hackathon / Super Admins
-    if (cedula === 'DEVPOST-JUDGE') return true;
-
-    // Validate Ecuadorian ID (Modulo 10 algorithm)
-    if (cedula.length !== 10) return false;
-    const digits = cedula.split('').map(Number);
-    if (digits.some(isNaN)) return false;
-    
-    const prov = digits[0] * 10 + digits[1];
-    if (prov < 1 || prov > 24) return false; // Province code 01-24
-    if (digits[2] >= 6) return false; // Third digit must be < 6 for natural persons
-
-    const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2];
-    let total = 0;
-    
-    for (let i = 0; i < 9; i++) {
-      let calc = digits[i] * coefficients[i];
-      if (calc >= 10) calc -= 9;
-      total += calc;
-    }
-    
-    const verifier = (Math.ceil(total / 10) * 10) - total;
-    return verifier === digits[9];
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
@@ -60,9 +37,21 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!validateCedula(formData.cedula)) {
+    const documentValidation = validateNationalDocument({
+      value: formData.cedula,
+      country: formData.country,
+      documentType: formData.documentType
+    });
+
+    if (!documentValidation.ok) {
       setStatus('error');
-      setMessage(lang === 'en' ? 'ID must contain only letters, numbers, or dashes (min 5 characters)' : 'La cédula/ID solo debe contener letras, números o guiones (min 5 caracteres)');
+      setMessage(
+        lang === 'en'
+          ? documentValidation.message || 'Invalid document'
+          : formData.country === 'EC'
+            ? 'Documento ecuatoriano inválido para el tipo seleccionado'
+            : 'El documento debe tener 5-32 letras, números o guiones'
+      );
       return;
     }
 
@@ -104,6 +93,8 @@ export default function RegisterPage() {
       redirect: 'You will be redirected to login in a few seconds...',
       idLabel: 'National ID / Document',
       idPlace: 'e.g. EMP-XP-001 or Passport',
+      countryLabel: 'Document country',
+      typeLabel: 'Document type',
       nameLabel: 'Full Name',
       namePlace: 'John Doe',
       passLabel: 'Password',
@@ -120,6 +111,8 @@ export default function RegisterPage() {
       redirect: 'Serás redirigido al login en unos segundos...',
       idLabel: 'Cédula / Documento',
       idPlace: 'Ej. EMP-XP-001 o Pasaporte',
+      countryLabel: 'País del documento',
+      typeLabel: 'Tipo de documento',
       nameLabel: 'Nombre Completo',
       namePlace: 'Juan Pérez',
       passLabel: 'Contraseña',
@@ -178,6 +171,48 @@ export default function RegisterPage() {
                 className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t.idPlace}
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1">{t.countryLabel}</label>
+                <select
+                  value={formData.country}
+                  onChange={e => {
+                    const country = e.target.value as DocumentCountry;
+                    setFormData({
+                      ...formData,
+                      country,
+                      documentType: country === 'EC' ? 'cedula' : 'employee_id'
+                    });
+                  }}
+                  className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="OTHER">{lang === 'en' ? 'Other' : 'Otro'}</option>
+                  <option value="EC">Ecuador</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1">{t.typeLabel}</label>
+                <select
+                  value={formData.documentType}
+                  onChange={e => setFormData({...formData, documentType: e.target.value as DocumentType})}
+                  className="w-full bg-zinc-900/50 border border-zinc-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {formData.country === 'EC' ? (
+                    <>
+                      <option value="cedula">Cédula</option>
+                      <option value="ruc">RUC</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="employee_id">{lang === 'en' ? 'Employee ID' : 'ID empleado'}</option>
+                      <option value="passport">{lang === 'en' ? 'Passport' : 'Pasaporte'}</option>
+                      <option value="other">{lang === 'en' ? 'Other' : 'Otro'}</option>
+                    </>
+                  )}
+                </select>
+              </div>
             </div>
             
             <div>

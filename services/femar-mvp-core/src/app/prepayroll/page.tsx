@@ -1,39 +1,52 @@
 "use client";
 
 import React, { useState } from 'react';
-import { mockEmployees } from '@/lib/mockData';
 import { useAuth } from "@/contexts/AuthContext";
+import { useEmployees } from "@/hooks/useEmployees";
 
 export default function PrePayrollPage() {
   const [filter, setFilter] = useState('ALL');
   const { activeCompanyId } = useAuth();
-  
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const { employees: companyEmployees, loadingEmployees } = useEmployees(activeCompanyId);
+  const [realtimeLogs, setRealtimeLogs] = React.useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = React.useState(true);
 
-  // Generate mock novelties for company employees
-  const novelties = companyEmployees.flatMap((emp, i) => {
-    const isLate = i % 3 === 0;
-    const isOvertime = i % 5 === 0;
-    
-    let type = 'ON_TIME';
-    let minutes = 0;
-    
-    if (isLate) {
-      type = 'LATE_ARRIVAL';
-      minutes = Math.floor(Math.random() * 45) + 5;
-    } else if (isOvertime) {
-      type = 'OVERTIME';
-      minutes = Math.floor(Math.random() * 120) + 30;
-    }
-    
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoadingLogs(true);
+    fetch('/api/logs/realtime', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled) setRealtimeLogs(data.logs || []);
+      })
+      .catch(() => {
+        if (!cancelled) setRealtimeLogs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLogs(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompanyId]);
+
+  const employeeMap = new Map(companyEmployees.map(emp => [emp.id, emp]));
+
+  const novelties = realtimeLogs
+    .filter(log => employeeMap.has(log.user_id))
+    .map((log, i) => {
+    const emp = employeeMap.get(log.user_id);
+    const state = String(log.state ?? '');
+    const type = state === '0' ? 'CHECK_IN' : state === '1' ? 'CHECK_OUT' : 'ATTENDANCE_EVENT';
+
     return {
-      id: `nov-${emp.id}-${i}`,
-      user_id: emp.id,
-      name: emp.name,
-      source: i % 2 === 0 ? 'ZKTECO' : 'MOBILE',
-      timestamp: new Date(Date.now() - (Math.random() * 1000000000)).toISOString(),
+      id: log.id || `log-${log.user_id}-${i}`,
+      user_id: log.user_id,
+      name: emp?.name || log.user_id,
+      source: log.source || 'ZKTECO',
+      timestamp: log.timestamp,
       type,
-      minutes
+      minutes: 0
     };
   }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -49,7 +62,7 @@ export default function PrePayrollPage() {
           </div>
           <div style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #333', backgroundColor: '#111', textAlign: 'center' }}>
             <div style={{ color: '#888', fontSize: '0.8rem', marginBottom: '0.25rem' }}>Empleados Procesados</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{companyEmployees.length}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{loadingEmployees ? '...' : companyEmployees.length}</div>
           </div>
         </div>
         
@@ -87,7 +100,11 @@ export default function PrePayrollPage() {
             </tr>
           </thead>
           <tbody>
-            {novelties.filter(n => filter === 'ALL' || n.source === filter).length === 0 ? (
+            {loadingLogs ? (
+              <tr>
+                <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>Cargando novedades reales...</td>
+              </tr>
+            ) : novelties.filter(n => filter === 'ALL' || n.source === filter).length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No hay novedades registradas.</td>
               </tr>
