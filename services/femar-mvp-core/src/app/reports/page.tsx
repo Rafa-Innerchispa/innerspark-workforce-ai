@@ -5,7 +5,7 @@ import GlassWidget from "@/components/GlassWidget";
 import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, User, Clock, AlertTriangle, MapPin } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
+import { useEmployees } from "../../hooks/useEmployees";
 import { generateDeterministicPayroll } from "@/lib/reportUtils";
 import * as XLSX from "xlsx";
 import { useSearchParams } from "next/navigation";
@@ -38,7 +38,7 @@ function ReportsContent() {
   const searchParams = useSearchParams();
   const { activeCompanyId } = useAuth();
 
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const { employees: companyEmployees } = useEmployees(activeCompanyId);
 
   const [reportType, setReportType] = useState("nomina"); // nomina, faltas, atrasos, consolidado
   const [selectedEmployee, setSelectedEmployee] = useState("all");
@@ -82,44 +82,43 @@ function ReportsContent() {
     return "Periodo Personalizado";
   };
 
-  // Generate dynamic fake data for the selected report
   const generateReportData = () => {
     let filteredEmployees = companyEmployees;
     if (selectedEmployee !== "all") {
-      filteredEmployees = companyEmployees.filter(e => e.id === selectedEmployee);
+      filteredEmployees = companyEmployees.filter((e: any) => e.id === selectedEmployee);
     }
 
     if (reportType === "nomina") {
       const report = generateDeterministicPayroll(companyEmployees, mobileLogs);
       if (selectedEmployee === "all") return report;
-      return report.filter(r => r.id === selectedEmployee);
+      return report.filter((r: any) => r.id === selectedEmployee);
     }
 
     // Since we removed fake data generators, other reports will just show empty or basic info
     // For XPRIZE, the main focus is the agent and payroll deterministic logic.
     if (reportType === "faltas") {
-      return filteredEmployees.map(emp => ({
+      return filteredEmployees.map((emp: any) => ({
         id: emp.id,
         name: emp.name,
         department: emp.department,
         faltasInjustificadas: 0, // Requires real attendance backend
         faltasJustificadas: 0,
         total: 0
-      })).filter(e => selectedEmployee !== "all" || true);
+      })).filter((e: any) => selectedEmployee !== "all" || true);
     }
 
     if (reportType === "atrasos") {
-      return filteredEmployees.map(emp => ({
+      return filteredEmployees.map((emp: any) => ({
         id: emp.id,
         name: emp.name,
         department: emp.department,
         cantidadAtrasos: 0, // Requires real attendance backend
         minutosTotales: 0
-      })).filter(e => selectedEmployee !== "all" || true);
+      })).filter((e: any) => selectedEmployee !== "all" || true);
     }
 
     if (reportType === "consolidado") {
-      return filteredEmployees.map(emp => ({
+      return filteredEmployees.map((emp: any) => ({
         id: emp.id,
         name: emp.name,
         status: emp.status,
@@ -245,9 +244,9 @@ function ReportsContent() {
                   </div>
                   {companyEmployees
                     .slice()
-                    .sort((a,b) => a.firstLastName.localeCompare(b.firstLastName))
-                    .filter(emp => emp.name.toLowerCase().includes(employeeSearch.toLowerCase()) || emp.id.includes(employeeSearch))
-                    .map(emp => (
+                    .sort((a: any, b: any) => a.firstLastName.localeCompare(b.firstLastName))
+                    .filter((emp: any) => emp.name.toLowerCase().includes(employeeSearch.toLowerCase()) || emp.id.includes(employeeSearch))
+                    .map((emp: any) => (
                       <div 
                         key={emp.id}
                         className={`p-3 text-sm cursor-pointer hover:bg-zinc-700/50 border-t border-zinc-700/50 ${selectedEmployee === emp.id ? "text-blue-400 bg-blue-500/10" : "text-zinc-300"}`}
@@ -329,7 +328,7 @@ function ReportsContent() {
                   </td>
                 </tr>
               ) : (
-                reportData.map((row: any, i) => (
+                reportData.map((row: any, i: number) => (
                   <tr key={i} className="hover:bg-zinc-800/40 transition-colors">
                     {reportType === "nomina" && (
                       <>
@@ -386,7 +385,7 @@ function ReportsContent() {
                     const date = new Date(log.timestamp).toLocaleString('es-EC');
                     const mapLink = `https://www.google.com/maps?q=${log.location.lat},${log.location.lng}`;
                     const userId = log.user_id === "mobile-user" ? "3333333333" : log.user_id;
-                    const employee = companyEmployees.find(e => e.id === userId);
+                    const employee = companyEmployees.find((e: any) => e.id === userId);
                     const employeeName = employee ? employee.name : (userId === "3333333333" ? "Empleado Prueba" : "Desconocido");
 
                     return (

@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState } from 'react';
-import { mockEmployees } from '@/lib/mockData';
 import { useAuth } from "@/contexts/AuthContext";
+import { useEmployees } from "../../hooks/useEmployees";
 
 export default function PrePayrollPage() {
   const [filter, setFilter] = useState('ALL');
   const { activeCompanyId } = useAuth();
   
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const { employees: companyEmployees } = useEmployees(activeCompanyId);
 
   // Generate mock novelties for company employees
-  const novelties = companyEmployees.flatMap((emp, i) => {
+  const novelties = companyEmployees.flatMap((emp: any, i: number) => {
     const isLate = i % 3 === 0;
     const isOvertime = i % 5 === 0;
     
@@ -35,7 +35,7 @@ export default function PrePayrollPage() {
       type,
       minutes
     };
-  }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   return (
     <div style={{ fontFamily: 'Inter, system-ui, sans-serif', padding: '2rem', backgroundColor: '#0A0A0A', color: '#FAFAFA', minHeight: '100vh' }}>
@@ -87,12 +87,12 @@ export default function PrePayrollPage() {
             </tr>
           </thead>
           <tbody>
-            {novelties.filter(n => filter === 'ALL' || n.source === filter).length === 0 ? (
+            {novelties.filter((n: any) => filter === 'ALL' || n.source === filter).length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No hay novedades registradas.</td>
               </tr>
             ) : (
-              novelties.filter(n => filter === 'ALL' || n.source === filter).map((item: any) => {
+              novelties.filter((n: any) => filter === 'ALL' || n.source === filter).map((item: any) => {
                 let badgeColor = '#333';
                 let textColor = '#FFF';
                 
