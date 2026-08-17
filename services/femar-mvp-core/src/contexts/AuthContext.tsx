@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { mockEmployees } from '@/lib/mockData';
 
 type Role = 'admin' | 'employee' | null;
 
@@ -44,9 +43,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsedUser = JSON.parse(stored);
         setUser(parsedUser);
-        setActiveCompanyIdState(localStorage.getItem('femar_active_company') || parsedUser.companyId);
+        if (parsedUser.role === 'superadmin') {
+          setActiveCompanyIdState(localStorage.getItem('femar_active_company') || parsedUser.companyId || 'femar');
+        } else {
+          setActiveCompanyIdState(parsedUser.companyId);
+          localStorage.setItem('femar_active_company', parsedUser.companyId);
+        }
       } catch (e) {
         console.error('Invalid session', e);
+        localStorage.removeItem('femar_session');
+        localStorage.removeItem('femar_active_company');
       }
     }
     setIsLoading(false);
@@ -80,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setActiveCompanyIdState(data.user.companyId);
           localStorage.setItem('femar_active_company', data.user.companyId);
         }
+        localStorage.removeItem('gemini_chat_history_null');
         
         return true;
       }
