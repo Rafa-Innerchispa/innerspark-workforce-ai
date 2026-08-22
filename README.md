@@ -52,3 +52,23 @@ npm run dev
 # Para pruebas con equipos físicos temporalmente, usar Cloudflare Tunnel:
 cloudflared tunnel --url http://localhost:3000
 ```
+
+<!-- RALFIA:PROJECT-STATUS:START -->
+## Estado operativo automático
+
+> Esta sección la mantiene automáticamente el Agente Documental de InnerOS. El contenido humano fuera de estos marcadores no se modifica.
+
+- Última sincronización: 2026-08-22T16:39:45.673043-05:00
+- Project ID: `innerspark-workforce-ai`
+- Repositorio: `Rafa-Innerchispa/innerspark-workforce-ai`
+- Runtime AMD: `/home/rlopez/inneros/inneros_core/workspaces/innerspark-workforce-ai`
+- Runtime primary: `/home/rlopez/inneros/inneros_core/workspaces/innerspark-workforce-ai`
+- HEAD remoto antes de sync: `97ac0ae688ebbb39dad3122b1fa507ae5f49e904`
+- Policy class: `product-app`
+- Write scope: `worktree`
+
+### Cambios recientes registrados
+
+- Sin cambios recientes registrados en coordinación.
+
+<!-- RALFIA:PROJECT-STATUS:END -->
