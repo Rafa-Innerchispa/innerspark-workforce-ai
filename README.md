@@ -58,12 +58,12 @@ cloudflared tunnel --url http://localhost:3000
 
 > Esta sección la mantiene automáticamente el Agente Documental de InnerOS. El contenido humano fuera de estos marcadores no se modifica.
 
-- Última sincronización: 2026-08-23T18:57:50.513651-05:00
+- Última sincronización: 2026-08-23T18:58:49.949102-05:00
 - Project ID: `innerspark-workforce-ai`
 - Repositorio: `Rafa-Innerchispa/innerspark-workforce-ai`
 - Runtime AMD: `/home/rlopez/inneros/inneros_core/workspaces/innerspark-workforce-ai`
 - Runtime primary: `/home/rlopez/inneros/inneros_core/workspaces/innerspark-workforce-ai`
-- HEAD remoto antes de sync: `f06f796dcbed1a55d8a6343b45615c57aaa1725b`
+- HEAD remoto antes de sync: `87377c39f139abc9f9eedfc944cc8e9af5134e03`
 - Policy class: `product-app`
 - Write scope: `worktree`
 
