@@ -1,463 +1,213 @@
 "use client";
 
-import React, { useState } from "react";
-import GlassWidget from "@/components/GlassWidget";
-import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, User, Clock, AlertTriangle, MapPin } from "lucide-react";
-import { useI18n } from "@/contexts/I18nContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
-import { generateDeterministicPayroll } from "@/lib/reportUtils";
-import * as XLSX from "xlsx";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  Bot,
+  Building2,
+  Camera,
+  CheckCircle2,
+  Clock3,
+  Fingerprint,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  WalletCards,
+} from "lucide-react";
 
-const LocationAddress = ({ lat, lng }: { lat: number; lng: number }) => {
-  const [address, setAddress] = useState<string>("Cargando ubicación...");
-  
-  React.useEffect(() => {
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.display_name) {
-          const parts = data.display_name.split(", ");
-          setAddress(parts.slice(0, 3).join(", "));
-        } else {
-          setAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-        }
-      })
-      .catch(() => setAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`));
-  }, [lat, lng]);
-
-  return <span className="text-zinc-300 block text-xs mb-1 truncate max-w-[250px]" title={address}>{address}</span>;
+type MetricResult = {
+  intent: string;
+  value: unknown;
+  totalLateMinutes?: number;
+  caveat?: string;
 };
 
-export const dynamic = "force-dynamic";
+type MobileLog = {
+  id: string;
+  user_id?: string | null;
+  event_at?: string | null;
+  location?: { lat?: number; lng?: number; accuracy?: number } | null;
+  verification?: {
+    geofence?: { status?: string; distanceMeters?: number };
+    mock_location?: string;
+    liveness?: string;
+    server_time?: string;
+  } | null;
+  photo_url?: string | null;
+  photo_available?: boolean;
+};
 
-function ReportsContent() {
-  const { t } = useI18n();
-  const searchParams = useSearchParams();
-  const { activeCompanyId } = useAuth();
+const metricDefinitions = [
+  { key: "employees", label: "Personas activas", icon: Users, accent: "from-blue-500/20 to-cyan-500/5", suffix: "" },
+  { key: "late_arrivals", label: "Llegadas tardías", icon: Clock3, accent: "from-amber-500/20 to-orange-500/5", suffix: "" },
+  { key: "incomplete_punches", label: "Marcaciones incompletas", icon: AlertTriangle, accent: "from-rose-500/20 to-red-500/5", suffix: "" },
+  { key: "monthly_cost", label: "Costo mensual configurado", icon: WalletCards, accent: "from-emerald-500/20 to-green-500/5", suffix: "" },
+] as const;
 
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+function formatMoney(value: unknown) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
+}
 
-  const [reportType, setReportType] = useState("nomina"); // nomina, faltas, atrasos, consolidado
-  const [selectedEmployee, setSelectedEmployee] = useState("all");
-  const [dateRange, setDateRange] = useState("month");
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
-  
-  // Custom Combobox state
-  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
-  const [employeeSearch, setEmployeeSearch] = useState("");
-
-  const [mobileLogs, setMobileLogs] = useState<any[]>([]);
-  const [loadingMobileLogs, setLoadingMobileLogs] = useState(false);
-
-  React.useEffect(() => {
-    // Fetch logs for ALL report types since we removed fake data generators
-    setLoadingMobileLogs(true);
-    fetch('/api/mobile/logs')
-      .then(res => res.json())
-      .then(data => {
-        if (data.logs) {
-          setMobileLogs(data.logs);
-        }
-      })
-      .finally(() => setLoadingMobileLogs(false));
-  }, [activeCompanyId]);
-
-  React.useEffect(() => {
-    if (searchParams?.get("download") === "pdf") {
-      setTimeout(() => {
-        window.print();
-      }, 1000);
-    }
-  }, [searchParams]);
-
-  const getReportSubtitle = () => {
-    if (dateRange === "month") return "Mes Actual";
-    if (dateRange === "last_month") return "Mes Anterior";
-    if (dateRange === "year") return "Año en Curso";
-    if (dateRange === "custom" && customStartDate && customEndDate) return `Del ${customStartDate} al ${customEndDate}`;
-    return "Periodo Personalizado";
-  };
-
-  // Generate dynamic fake data for the selected report
-  const generateReportData = () => {
-    let filteredEmployees = companyEmployees;
-    if (selectedEmployee !== "all") {
-      filteredEmployees = companyEmployees.filter(e => e.id === selectedEmployee);
-    }
-
-    if (reportType === "nomina") {
-      const report = generateDeterministicPayroll(companyEmployees, mobileLogs);
-      if (selectedEmployee === "all") return report;
-      return report.filter(r => r.id === selectedEmployee);
-    }
-
-    // Since we removed fake data generators, other reports will just show empty or basic info
-    // For XPRIZE, the main focus is the agent and payroll deterministic logic.
-    if (reportType === "faltas") {
-      return filteredEmployees.map(emp => ({
-        id: emp.id,
-        name: emp.name,
-        department: emp.department,
-        faltasInjustificadas: 0, // Requires real attendance backend
-        faltasJustificadas: 0,
-        total: 0
-      })).filter(e => selectedEmployee !== "all" || true);
-    }
-
-    if (reportType === "atrasos") {
-      return filteredEmployees.map(emp => ({
-        id: emp.id,
-        name: emp.name,
-        department: emp.department,
-        cantidadAtrasos: 0, // Requires real attendance backend
-        minutosTotales: 0
-      })).filter(e => selectedEmployee !== "all" || true);
-    }
-
-    if (reportType === "consolidado") {
-      return filteredEmployees.map(emp => ({
-        id: emp.id,
-        name: emp.name,
-        status: emp.status,
-        diasTrabajados: 0,
-        novedades: "Ninguna"
-      }));
-    }
-
-    return [];
-  };
-
-  const reportData = generateReportData();
-
-  // Calculate totals for nomina
-  const totalsNomina = reportType === "nomina" ? reportData.reduce((acc: any, row: any) => ({
-    base: acc.base + row.base,
-    overtime: acc.overtime + row.overtime,
-    iess: acc.iess + row.iess,
-    penalty: acc.penalty + row.penalty,
-    net: acc.net + row.net
-  }), { base: 0, overtime: 0, iess: 0, penalty: 0, net: 0 }) : null;
-
-  const handleExportExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(reportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
-    XLSX.writeFile(workbook, `Reporte_FEMAR_${reportType}.xlsx`);
-  };
-
-  return (
-    <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-          Generador de Reportes
-        </h1>
-        <p className="text-sm md:text-base text-zinc-400">
-          Crea analíticas detalladas de asistencia, atrasos, faltas y nómina para tus empleados.
-        </p>
-      </div>
-
-      <GlassWidget title="Filtros del Reporte" icon={Filter}>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm text-zinc-400 mb-2">Tipo de Reporte</label>
-            <select 
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
-            >
-              <option value="nomina">Rol de Pagos (Sueldos y Descuentos)</option>
-              <option value="faltas">Reporte de Faltas (Ausentismo)</option>
-              <option value="atrasos">Reporte de Atrasos (Minutos tarde)</option>
-              <option value="consolidado">Consolidado General por Persona</option>
-              <option value="mobile_checkins">Marcaciones Móviles (GPS y Fotos)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-2">Periodo</label>
-            <select 
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
-            >
-              <option value="month">Mes Actual</option>
-              <option value="last_month">Mes Anterior</option>
-              <option value="year">Año en curso</option>
-              <option value="custom">Rango Personalizado...</option>
-            </select>
-            {dateRange === "custom" && (
-              <div className="flex gap-2 mt-2">
-                <input 
-                  type="date" 
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white focus:outline-none text-xs" 
-                />
-                <input 
-                  type="date" 
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white focus:outline-none text-xs" 
-                />
-              </div>
-            )}
-          </div>
-          <div className="relative">
-            <label className="block text-sm text-zinc-400 mb-2">Buscar Empleado</label>
-            <div 
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white flex items-center justify-between cursor-text relative z-20"
-              onClick={() => setIsEmployeeDropdownOpen(true)}
-            >
-              <input
-                type="text"
-                placeholder="Escribe el apellido o nombre..."
-                value={employeeSearch}
-                onChange={(e) => {
-                  setEmployeeSearch(e.target.value);
-                  setIsEmployeeDropdownOpen(true);
-                  if (e.target.value === "") setSelectedEmployee("all");
-                }}
-                onFocus={() => setIsEmployeeDropdownOpen(true)}
-                className="bg-transparent border-none outline-none w-full text-white placeholder-zinc-500"
-              />
-              <User className="w-4 h-4 text-zinc-500" />
-            </div>
-            
-            {isEmployeeDropdownOpen && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setIsEmployeeDropdownOpen(false)} 
-                />
-                <div className="absolute top-full left-0 mt-2 w-full bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-20 max-h-60 overflow-y-auto">
-                  <div 
-                    className={`p-3 text-sm cursor-pointer hover:bg-zinc-700/50 ${selectedEmployee === "all" ? "text-blue-400 bg-blue-500/10" : "text-white"}`}
-                    onClick={() => {
-                      setSelectedEmployee("all");
-                      setEmployeeSearch("");
-                      setIsEmployeeDropdownOpen(false);
-                    }}
-                  >
-                    Todos los Empleados ({companyEmployees.length})
-                  </div>
-                  {companyEmployees
-                    .slice()
-                    .sort((a,b) => a.firstLastName.localeCompare(b.firstLastName))
-                    .filter(emp => emp.name.toLowerCase().includes(employeeSearch.toLowerCase()) || emp.id.includes(employeeSearch))
-                    .map(emp => (
-                      <div 
-                        key={emp.id}
-                        className={`p-3 text-sm cursor-pointer hover:bg-zinc-700/50 border-t border-zinc-700/50 ${selectedEmployee === emp.id ? "text-blue-400 bg-blue-500/10" : "text-zinc-300"}`}
-                        onClick={() => {
-                          setSelectedEmployee(emp.id);
-                          setEmployeeSearch(emp.name);
-                          setIsEmployeeDropdownOpen(false);
-                        }}
-                      >
-                        {emp.firstLastName} {emp.secondLastName} {emp.firstName} {emp.secondName}
-                      </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </GlassWidget>
-
-      <GlassWidget 
-        title={`Vista Previa del Reporte (${getReportSubtitle()})`} 
-        icon={FileBarChart}
-      >
-        <div className="p-0 overflow-x-auto">
-          <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
-            <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
-              <tr>
-                {reportType === "nomina" && (
-                  <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">C.I.</th>
-                    <th className="px-6 py-4 font-medium text-right">Sueldo Base</th>
-                    <th className="px-6 py-4 font-medium text-right text-green-400">H. Extras</th>
-                    <th className="px-6 py-4 font-medium text-right text-red-400">IESS</th>
-                    <th className="px-6 py-4 font-medium text-right text-red-400">Multas</th>
-                    <th className="px-6 py-4 font-bold text-right text-blue-400">Líquido a Recibir</th>
-                  </>
-                )}
-                {reportType === "faltas" && (
-                  <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">Departamento</th>
-                    <th className="px-6 py-4 font-medium text-center text-red-400">Faltas Injustificadas</th>
-                    <th className="px-6 py-4 font-medium text-center text-yellow-400">Faltas Justificadas</th>
-                    <th className="px-6 py-4 font-bold text-center">Total Faltas</th>
-                  </>
-                )}
-                {reportType === "atrasos" && (
-                  <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">Departamento</th>
-                    <th className="px-6 py-4 font-medium text-center text-orange-400">Nº de Atrasos</th>
-                    <th className="px-6 py-4 font-medium text-center text-red-400">Minutos Totales Perdidos</th>
-                  </>
-                )}
-                {reportType === "consolidado" && (
-                  <>
-                    <th className="px-6 py-4 font-medium">Empleado</th>
-                    <th className="px-6 py-4 font-medium">C.I.</th>
-                    <th className="px-6 py-4 font-medium text-center">Días Trabajados</th>
-                    <th className="px-6 py-4 font-medium">Estado / Novedades</th>
-                  </>
-                )}
-                {reportType === "mobile_checkins" && (
-                  <>
-                    <th className="px-6 py-4 font-medium">Empleado (ID)</th>
-                    <th className="px-6 py-4 font-medium">Fecha y Hora</th>
-                    <th className="px-6 py-4 font-medium">Ubicación GPS</th>
-                    <th className="px-6 py-4 font-medium">Foto (Liveness)</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {reportData.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">
-                    No hay datos para los filtros seleccionados.
-                  </td>
-                </tr>
-              ) : (
-                reportData.map((row: any, i) => (
-                  <tr key={i} className="hover:bg-zinc-800/40 transition-colors">
-                    {reportType === "nomina" && (
-                      <>
-                        <td className="px-6 py-4 font-medium text-zinc-200">{row.name}</td>
-                        <td className="px-6 py-4 text-zinc-500">{row.id}</td>
-                        <td className="px-6 py-4 text-right">${row.base.toFixed(2)}</td>
-                        <td className="px-6 py-4 text-right text-green-400/90">${row.overtime.toFixed(2)}</td>
-                        <td className="px-6 py-4 text-right text-red-400/90">-${row.iess.toFixed(2)}</td>
-                        <td className="px-6 py-4 text-right text-red-400/90">-${row.penalty.toFixed(2)}</td>
-                        <td className="px-6 py-4 text-right font-bold text-blue-400">${row.net.toFixed(2)}</td>
-                      </>
-                    )}
-                    {reportType === "faltas" && (
-                      <>
-                        <td className="px-6 py-4 font-medium text-zinc-200">{row.name}</td>
-                        <td className="px-6 py-4 text-zinc-400">{row.department}</td>
-                        <td className="px-6 py-4 text-center text-red-400/90 font-bold">{row.faltasInjustificadas}</td>
-                        <td className="px-6 py-4 text-center text-yellow-400/90">{row.faltasJustificadas}</td>
-                        <td className="px-6 py-4 text-center font-bold">{row.total}</td>
-                      </>
-                    )}
-                    {reportType === "atrasos" && (
-                      <>
-                        <td className="px-6 py-4 font-medium text-zinc-200">{row.name}</td>
-                        <td className="px-6 py-4 text-zinc-400">{row.department}</td>
-                        <td className="px-6 py-4 text-center text-orange-400/90 font-bold">{row.cantidadAtrasos}</td>
-                        <td className="px-6 py-4 text-center text-red-400/90 font-bold">{row.minutosTotales} min</td>
-                      </>
-                    )}
-                    {reportType === "consolidado" && (
-                      <>
-                        <td className="px-6 py-4 font-medium text-zinc-200">{row.name}</td>
-                        <td className="px-6 py-4 text-zinc-500">{row.id}</td>
-                        <td className="px-6 py-4 text-center font-bold text-blue-400">{row.diasTrabajados}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded text-xs border ${
-                            row.status === "Activo" ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-                          }`}>
-                            {row.status}
-                          </span>
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                ))
-              )}
-              {reportType === "mobile_checkins" && (
-                loadingMobileLogs ? (
-                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">Cargando marcaciones y resolviendo imágenes seguras...</td></tr>
-                ) : mobileLogs.length === 0 ? (
-                  <tr><td colSpan={4} className="px-6 py-8 text-center text-zinc-500">No hay marcaciones móviles registradas aún.</td></tr>
-                ) : (
-                  mobileLogs.map((log: any, i) => {
-                    const date = new Date(log.timestamp).toLocaleString('es-EC');
-                    const mapLink = `https://www.google.com/maps?q=${log.location.lat},${log.location.lng}`;
-                    const userId = log.user_id === "mobile-user" ? "3333333333" : log.user_id;
-                    const employee = companyEmployees.find(e => e.id === userId);
-                    const employeeName = employee ? employee.name : (userId === "3333333333" ? "Empleado Prueba" : "Desconocido");
-
-                    return (
-                      <tr key={i} className="hover:bg-zinc-800/40 transition-colors">
-                        <td className="px-6 py-4">
-                          <span className="font-medium text-zinc-200 block">{employeeName}</span>
-                          <span className="text-xs text-zinc-500 font-normal">C.I. {userId}</span>
-                        </td>
-                        <td className="px-6 py-4 text-zinc-300">{date}</td>
-                        <td className="px-6 py-4">
-                          <LocationAddress lat={log.location.lat} lng={log.location.lng} />
-                          <a href={mapLink} target="_blank" rel="noreferrer" className="text-blue-400 text-xs hover:underline flex items-center gap-1 mt-1">
-                            <MapPin className="w-3 h-3" /> Ver en Google Maps
-                          </a>
-                        </td>
-                        <td className="px-6 py-4">
-                          {log.photo_url ? (
-                            <a href={log.photo_url} target="_blank" rel="noreferrer">
-                              <img src={log.photo_url} alt="Checkin" className="w-12 h-12 rounded-lg object-cover border border-zinc-700 hover:border-blue-500 transition-colors" />
-                            </a>
-                          ) : (
-                            <span className="text-zinc-500">Sin foto</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )
-              )}
-              {reportType === "nomina" && totalsNomina && reportData.length > 0 && (
-                <tr className="bg-zinc-800/80 border-t border-zinc-700">
-                  <td className="px-6 py-4 font-bold text-zinc-200" colSpan={2}>TOTALES ({reportData.length} Empleados)</td>
-                  <td className="px-6 py-4 text-right font-bold text-zinc-200">${totalsNomina.base.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-bold text-green-400/90">+${totalsNomina.overtime.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-bold text-red-400/90">-${totalsNomina.iess.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-bold text-red-400/90">-${totalsNomina.penalty.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-bold text-blue-400">${totalsNomina.net.toFixed(2)}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 rounded-b-2xl flex flex-wrap justify-end gap-3 print:hidden">
-          <button 
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl transition-colors font-medium text-sm flex items-center gap-2 border border-zinc-700"
-          >
-            <Printer className="w-4 h-4" /> Imprimir
-          </button>
-          <button 
-            onClick={handleExportExcel}
-            className="px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-xl transition-colors font-medium text-sm flex items-center gap-2 border border-green-500/30"
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Exportar a Excel
-          </button>
-          <button 
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors font-medium text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
-          >
-            <Download className="w-4 h-4" /> Descargar PDF
-          </button>
-        </div>
-      </GlassWidget>
-    </main>
-  );
+function verificationLabel(status?: string) {
+  if (status === "verified") return "Dentro de geocerca";
+  if (status === "outside") return "Fuera de geocerca";
+  return "Geocerca no configurada";
 }
 
 export default function ReportsPage() {
+  const [metrics, setMetrics] = useState<Record<string, MetricResult>>({});
+  const [departments, setDepartments] = useState<Record<string, { employees: number; configuredMonthlyCost: number }>>({});
+  const [mobileLogs, setMobileLogs] = useState<MobileLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [ariaPrompt, setAriaPrompt] = useState("¿Cuántos atrasos hubo?");
+  const [ariaAnswer, setAriaAnswer] = useState("Pregúntame por personas, atrasos, marcaciones incompletas o costos configurados.");
+  const [ariaBusy, setAriaBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const intents = ["employees", "late_arrivals", "incomplete_punches", "monthly_cost", "annual_cost", "department_cost"];
+        const responses = await Promise.all(intents.map(async intent => {
+          const response = await fetch(`/api/analytics/query?intent=${intent}`, { cache: "no-store" });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.message || body.error || "Analytics unavailable");
+          return [intent, body.result] as const;
+        }));
+        const next = Object.fromEntries(responses);
+        const evidenceResponse = await fetch("/api/mobile/logs", { cache: "no-store" });
+        const evidenceBody = await evidenceResponse.json().catch(() => ({ logs: [] }));
+        if (!alive) return;
+        setMetrics(next);
+        setDepartments((next.department_cost?.value || {}) as Record<string, { employees: number; configuredMonthlyCost: number }>);
+        setMobileLogs(evidenceResponse.ok ? (evidenceBody.logs || []) : []);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
+    return () => { alive = false; };
+  }, []);
+
+  const annualCost = Number(metrics.annual_cost?.value || 0);
+  const totalLateMinutes = Number(metrics.late_arrivals?.totalLateMinutes || 0);
+  const recentEvidence = useMemo(() => mobileLogs.slice(0, 6), [mobileLogs]);
+
+  const askAria = async (question?: string) => {
+    const prompt = question || ariaPrompt;
+    if (!prompt.trim()) return;
+    setAriaPrompt(prompt);
+    setAriaBusy(true);
+    try {
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, language: "es" }),
+      });
+      const body = await response.json();
+      setAriaAnswer(body.text || body.message || body.error || "ARIA no pudo responder esta consulta.");
+    } catch {
+      setAriaAnswer("ARIA no pudo comunicarse con el servidor.");
+    } finally {
+      setAriaBusy(false);
+    }
+  };
+
   return (
-    <Suspense fallback={<div className="p-8 text-center text-zinc-500">Cargando reportes...</div>}>
-      <ReportsContent />
-    </Suspense>
+    <main className="min-h-screen bg-[#080b12] text-white">
+      <div className="mx-auto max-w-[1500px] px-4 py-6 md:px-8 md:py-10">
+        <header className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-[#141a26] via-[#101521] to-[#0c1019] p-6 md:p-9 shadow-2xl">
+          <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="relative flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300"><ShieldCheck className="h-3.5 w-3.5" /> Datos con aislamiento por empresa</span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-300"><Bot className="h-3.5 w-3.5" /> ARIA + motor determinista</span>
+              </div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[.28em] text-zinc-500">Workforce Intelligence</p>
+              <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">Tu operación laboral, convertida en decisiones.</h1>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">Asistencia, evidencia, costos y anomalías se calculan desde la misma fuente de verdad que utiliza ARIA. Sin números inventados y sin cruzar información entre empresas.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm xl:w-[410px]">
+              <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4"><div className="text-zinc-500">Costo anual configurado</div><div className="mt-1 text-xl font-semibold">{loading ? "…" : formatMoney(annualCost)}</div></div>
+              <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4"><div className="text-zinc-500">Minutos tarde</div><div className="mt-1 text-xl font-semibold">{loading ? "…" : totalLateMinutes}</div></div>
+            </div>
+          </div>
+        </header>
+
+        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {metricDefinitions.map(({ key, label, icon: Icon, accent }) => {
+            const result = metrics[key];
+            const value = key === "monthly_cost" ? formatMoney(result?.value) : result?.value ?? 0;
+            return (
+              <article key={key} className={`rounded-3xl border border-white/10 bg-gradient-to-br ${accent} p-5 shadow-xl backdrop-blur`}>
+                <div className="flex items-start justify-between"><div className="rounded-2xl border border-white/10 bg-black/20 p-2.5"><Icon className="h-5 w-5 text-zinc-200" /></div><span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Live</span></div>
+                <div className="mt-8 text-3xl font-semibold tracking-tight">{loading ? "…" : value}</div>
+                <div className="mt-1 text-sm text-zinc-400">{label}</div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="mt-6 grid gap-6 xl:grid-cols-[1.12fr_.88fr]">
+          <div className="rounded-[28px] border border-white/10 bg-[#10141e] p-5 md:p-7">
+            <div className="flex items-center justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-[.22em] text-zinc-600">Costo por estructura</p><h2 className="mt-1 text-2xl font-semibold">Departamentos</h2></div>
+              <Building2 className="h-6 w-6 text-zinc-600" />
+            </div>
+            <div className="mt-6 space-y-3">
+              {Object.keys(departments).length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-600">Aún no hay costos/departamentos configurados.</div> : Object.entries(departments).map(([name, data]) => (
+                <div key={name} className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[.025] px-4 py-4">
+                  <div><div className="font-medium text-zinc-200">{name}</div><div className="mt-1 text-xs text-zinc-600">{data.employees} persona{data.employees === 1 ? "" : "s"}</div></div>
+                  <div className="text-right"><div className="font-semibold">{formatMoney(data.configuredMonthlyCost)}</div><div className="mt-1 text-xs text-zinc-600">mensual configurado</div></div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-5 text-xs leading-5 text-zinc-600">Los costos mostrados usan únicamente valores configurados en cada empleado. No aplicamos descuentos, IESS, horas extra ni reglas legales ocultas.</p>
+          </div>
+
+          <div className="relative overflow-hidden rounded-[28px] border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-[#111522] to-blue-500/10 p-5 md:p-7">
+            <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-violet-400/10 blur-3xl" />
+            <div className="relative">
+              <div className="flex items-center gap-3"><div className="rounded-2xl bg-violet-400/15 p-2.5"><Sparkles className="h-5 w-5 text-violet-300" /></div><div><p className="text-xs font-bold uppercase tracking-[.22em] text-violet-300/70">ARIA</p><h2 className="text-2xl font-semibold">Pregunta a tu operación</h2></div></div>
+              <div className="mt-5 min-h-28 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-zinc-300">{ariaBusy ? "ARIA está consultando la fuente de verdad…" : ariaAnswer}</div>
+              <div className="mt-4 flex gap-2"><input value={ariaPrompt} onChange={event => setAriaPrompt(event.target.value)} onKeyDown={event => { if (event.key === "Enter") askAria(); }} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm outline-none placeholder:text-zinc-700 focus:border-violet-400/40" placeholder="Ej. ¿Cuál es mi costo mensual?" /><button onClick={() => askAria()} disabled={ariaBusy} className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-black transition hover:bg-zinc-200 disabled:opacity-50">Consultar</button></div>
+              <div className="mt-3 flex flex-wrap gap-2">{["¿Cuántos empleados tengo?", "Muéstrame los atrasos", "¿Cuál es el costo anual?"].map(question => <button key={question} onClick={() => askAria(question)} className="rounded-full border border-white/10 bg-white/[.035] px-3 py-1.5 text-xs text-zinc-400 hover:text-white">{question}</button>)}</div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-[28px] border border-white/10 bg-[#10141e] p-5 md:p-7">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-zinc-600">Evidencia móvil</p><h2 className="mt-1 text-2xl font-semibold">Últimas marcaciones remotas</h2></div><div className="flex items-center gap-2 text-xs text-zinc-500"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> hora del servidor + ubicación + foto privada</div></div>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {recentEvidence.length === 0 ? <div className="col-span-full rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-600">Todavía no existen marcaciones móviles para esta empresa.</div> : recentEvidence.map(log => (
+              <article key={log.id} className="flex gap-4 rounded-2xl border border-white/8 bg-white/[.025] p-4">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-black/30">{log.photo_url ? <img src={log.photo_url} alt="Evidencia de marcación" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center"><Camera className="h-5 w-5 text-zinc-700" /></div>}</div>
+                <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div><div className="font-medium">{log.user_id || "Usuario"}</div><div className="mt-1 text-xs text-zinc-600">{log.event_at ? new Date(log.event_at).toLocaleString("es-EC") : "Sin hora"}</div></div><span className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-zinc-500">{verificationLabel(log.verification?.geofence?.status)}</span></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500"><span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> precisión {Math.round(Number(log.location?.accuracy || 0))} m</span><span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> hora servidor {log.verification?.server_time === "verified" ? "verificada" : "n/d"}</span></div></div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-[28px] border border-blue-400/15 bg-gradient-to-r from-blue-500/10 via-[#10141e] to-cyan-500/5 p-6 md:p-8">
+          <div className="grid gap-7 xl:grid-cols-[.8fr_1.2fr] xl:items-center">
+            <div><p className="text-xs font-bold uppercase tracking-[.24em] text-blue-300/70">Una plataforma, más módulos</p><h2 className="mt-2 text-3xl font-semibold">Workforce es el inicio, no el límite.</h2><p className="mt-3 text-sm leading-6 text-zinc-400">La misma identidad, tenants, auditoría y ARIA pueden extenderse a otros procesos sin obligar al cliente a comprar sistemas aislados.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[{ icon: Fingerprint, title: "Accesos", text: "Puertas, tags y biometría" }, { icon: WalletCards, title: "Nómina", text: "Pre-nómina y aprobación" }, { icon: Camera, title: "Vigilancia", text: "Eventos y evidencia" }, { icon: Activity, title: "Operaciones", text: "Alertas y workflows" }].map(({ icon: Icon, title, text }) => (
+                <div key={title} className="group rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:-translate-y-0.5 hover:border-blue-400/25"><div className="flex items-center justify-between"><Icon className="h-5 w-5 text-blue-300" /><ArrowUpRight className="h-4 w-4 text-zinc-700 transition group-hover:text-blue-300" /></div><div className="mt-5 font-semibold">{title}</div><div className="mt-1 text-xs text-zinc-500">{text}</div><div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-blue-300/60">Listo para extender</div></div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
