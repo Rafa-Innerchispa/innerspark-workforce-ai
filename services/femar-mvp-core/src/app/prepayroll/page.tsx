@@ -1,137 +1,84 @@
 "use client";
 
-import React, { useState } from 'react';
-import { mockEmployees } from '@/lib/mockData';
-import { useAuth } from "@/contexts/AuthContext";
+import React, { useEffect, useMemo, useState } from 'react';
+import GlassWidget from '@/components/GlassWidget';
+import { AlertTriangle, Clock3, DollarSign, Filter, ShieldCheck, Users } from 'lucide-react';
+
+type Row = {
+  employeeId: string; name: string; department: string; baseSalary: number;
+  lateEvents: number; lateMinutes: number; overtimeMinutes: number;
+  earlyDepartureMinutes: number; sourceEvents: number;
+};
 
 export default function PrePayrollPage() {
+  const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState('ALL');
-  const { activeCompanyId } = useAuth();
-  
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Generate mock novelties for company employees
-  const novelties = companyEmployees.flatMap((emp, i) => {
-    const isLate = i % 3 === 0;
-    const isOvertime = i % 5 === 0;
-    
-    let type = 'ON_TIME';
-    let minutes = 0;
-    
-    if (isLate) {
-      type = 'LATE_ARRIVAL';
-      minutes = Math.floor(Math.random() * 45) + 5;
-    } else if (isOvertime) {
-      type = 'OVERTIME';
-      minutes = Math.floor(Math.random() * 120) + 30;
-    }
-    
-    return {
-      id: `nov-${emp.id}-${i}`,
-      user_id: emp.id,
-      name: emp.name,
-      source: i % 2 === 0 ? 'ZKTECO' : 'MOBILE',
-      timestamp: new Date(Date.now() - (Math.random() * 1000000000)).toISOString(),
-      type,
-      minutes
-    };
-  }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/prepayroll/summary');
+        if (!res.ok) throw new Error('No se pudo cargar la prenómina');
+        const data = await res.json();
+        setRows(data.rows || []);
+      } catch (e) { setError(e instanceof Error ? e.message : 'Error de carga'); }
+      finally { setLoading(false); }
+    })();
+  }, []);
 
-  return (
-    <div style={{ fontFamily: 'Inter, system-ui, sans-serif', padding: '2rem', backgroundColor: '#0A0A0A', color: '#FAFAFA', minHeight: '100vh' }}>
-      <header style={{ borderBottom: '1px solid #333', paddingBottom: '1rem', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 600, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Prenómina y Novedades
-            </h1>
-            <p style={{ color: '#888', marginTop: '0.5rem' }}>Consolidado de asistencia, horas extra y llegadas tardías ({novelties.length} registros)</p>
-          </div>
-          <div style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #333', backgroundColor: '#111', textAlign: 'center' }}>
-            <div style={{ color: '#888', fontSize: '0.8rem', marginBottom: '0.25rem' }}>Empleados Procesados</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{companyEmployees.length}</div>
-          </div>
-        </div>
-        
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-          <button 
-            onClick={() => setFilter('ALL')}
-            style={{ padding: '0.5rem 1rem', borderRadius: '8px', background: filter === 'ALL' ? '#3b82f6' : '#222', color: '#fff', border: 'none', cursor: 'pointer' }}
-          >
-            Todas
-          </button>
-          <button 
-            onClick={() => setFilter('ZKTECO')}
-            style={{ padding: '0.5rem 1rem', borderRadius: '8px', background: filter === 'ZKTECO' ? '#3b82f6' : '#222', color: '#fff', border: 'none', cursor: 'pointer' }}
-          >
-            Locales (ZKTeco)
-          </button>
-          <button 
-            onClick={() => setFilter('MOBILE')}
-            style={{ padding: '0.5rem 1rem', borderRadius: '8px', background: filter === 'MOBILE' ? '#3b82f6' : '#222', color: '#fff', border: 'none', cursor: 'pointer' }}
-          >
-            Remotas (Mobile)
-          </button>
-        </div>
-      </header>
+  const filtered = useMemo(() => rows.filter(r => {
+    if (filter === 'LATE') return r.lateMinutes > 0;
+    if (filter === 'OVERTIME') return r.overtimeMinutes > 0;
+    if (filter === 'EARLY') return r.earlyDepartureMinutes > 0;
+    return true;
+  }), [rows, filter]);
 
-      <div style={{ overflowX: 'auto', backgroundColor: '#111', borderRadius: '12px', border: '1px solid #222', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#1A1A1A', borderBottom: '1px solid #333' }}>
-              <th style={{ padding: '1rem', color: '#AAA', fontWeight: 500 }}>Empleado</th>
-              <th style={{ padding: '1rem', color: '#AAA', fontWeight: 500 }}>Origen</th>
-              <th style={{ padding: '1rem', color: '#AAA', fontWeight: 500 }}>Fecha / Hora</th>
-              <th style={{ padding: '1rem', color: '#AAA', fontWeight: 500 }}>Tipo de Novedad</th>
-              <th style={{ padding: '1rem', color: '#AAA', fontWeight: 500 }}>Minutos</th>
-            </tr>
-          </thead>
-          <tbody>
-            {novelties.filter(n => filter === 'ALL' || n.source === filter).length === 0 ? (
-              <tr>
-                <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No hay novedades registradas.</td>
-              </tr>
-            ) : (
-              novelties.filter(n => filter === 'ALL' || n.source === filter).map((item: any) => {
-                let badgeColor = '#333';
-                let textColor = '#FFF';
-                
-                if (item.type === 'LATE_ARRIVAL') { badgeColor = '#7f1d1d'; textColor = '#fca5a5'; }
-                if (item.type === 'OVERTIME') { badgeColor = '#14532d'; textColor = '#86efac'; }
-                if (item.type === 'EARLY_DEPARTURE') { badgeColor = '#7c2d12'; textColor = '#fdba74'; }
-                if (item.type === 'ON_TIME') { badgeColor = '#1e3a8a'; textColor = '#93c5fd'; }
+  const totals = useMemo(() => rows.reduce((a,r) => ({
+    employees: a.employees + 1,
+    events: a.events + r.sourceEvents,
+    late: a.late + r.lateMinutes,
+    overtime: a.overtime + r.overtimeMinutes
+  }), { employees:0, events:0, late:0, overtime:0 }), [rows]);
 
-                return (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #222' }}>
-                    <td style={{ padding: '1rem', fontWeight: 500 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{item.name}</span>
-                        <span style={{ fontSize: '0.8rem', color: '#888' }}>{item.user_id}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', backgroundColor: '#222', border: '1px solid #333' }}>
-                        {item.source}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem', color: '#CCC' }}>
-                      {new Date(item.timestamp).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{ padding: '0.25rem 0.75rem', borderRadius: '9999px', fontSize: '0.85rem', fontWeight: 500, backgroundColor: badgeColor, color: textColor }}>
-                        {item.type}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem', fontWeight: 600, color: item.minutes > 0 ? '#E2E8F0' : '#555' }}>
-                      {item.minutes > 0 ? `${item.minutes} min` : '-'}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
+  return <main className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col gap-6">
+    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div><div className="text-xs tracking-[.25em] text-violet-400 font-bold">WORKFORCE • PAYROLL CONTROL</div>
+      <h1 className="text-3xl md:text-4xl font-bold text-white mt-2">Pre‑nómina verificable</h1>
+      <p className="text-zinc-400 mt-2">Hechos de asistencia reales primero. Reglas monetarias sólo cuando la empresa las configure.</p></div>
+      <div className="flex items-center gap-2 text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 rounded-full px-3 py-2"><ShieldCheck className="w-4 h-4"/> Sin números inventados</div>
+    </div>
+
+    {error && <div className="border border-red-500/30 bg-red-500/10 text-red-300 rounded-xl p-3">{error}</div>}
+
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <Metric icon={Users} label="Empleados" value={String(totals.employees)} />
+      <Metric icon={Clock3} label="Eventos fuente" value={String(totals.events)} />
+      <Metric icon={AlertTriangle} label="Min. atraso" value={String(totals.late)} />
+      <Metric icon={DollarSign} label="Min. horas extra" value={String(totals.overtime)} />
+    </div>
+
+    <GlassWidget title="Novedades que impactan pre‑nómina" icon={Filter}>
+      <div className="p-4 flex flex-wrap gap-2 border-b border-zinc-800">
+        {[['ALL','Todas'],['LATE','Atrasos'],['OVERTIME','Horas extra'],['EARLY','Salidas tempranas']].map(([k,v]) => <button key={k} onClick={()=>setFilter(k)} className={`px-3 py-2 rounded-lg text-sm border ${filter===k?'bg-blue-600 border-blue-500 text-white':'bg-zinc-900 border-zinc-700 text-zinc-300'}`}>{v}</button>)}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-zinc-500 border-b border-zinc-800"><tr><th className="p-4 text-left">Empleado</th><th className="p-4 text-left">Área</th><th className="p-4 text-right">Atrasos</th><th className="p-4 text-right">Min. atraso</th><th className="p-4 text-right">Min. extra</th><th className="p-4 text-right">Salida temprana</th><th className="p-4 text-right">Eventos</th></tr></thead>
+          <tbody className="divide-y divide-zinc-800">
+            {loading ? <tr><td colSpan={7} className="p-8 text-center text-zinc-500">Cargando...</td></tr> : filtered.length===0 ? <tr><td colSpan={7} className="p-8 text-center text-zinc-500">No hay novedades para este filtro.</td></tr> : filtered.map(r => <tr key={r.employeeId} className="hover:bg-zinc-900/50"><td className="p-4"><div className="font-semibold text-white">{r.name}</div><div className="text-xs text-zinc-500">{r.employeeId}</div></td><td className="p-4 text-zinc-300">{r.department}</td><td className="p-4 text-right">{r.lateEvents}</td><td className="p-4 text-right text-amber-300">{r.lateMinutes}</td><td className="p-4 text-right text-emerald-300">{r.overtimeMinutes}</td><td className="p-4 text-right text-orange-300">{r.earlyDepartureMinutes}</td><td className="p-4 text-right">{r.sourceEvents}</td></tr>)}
           </tbody>
         </table>
       </div>
+    </GlassWidget>
+
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 text-sm text-zinc-300">
+      <strong className="text-blue-300">Siguiente nivel:</strong> cuando RRHH configure jornada, tarifa, recargos, descuentos y reglas aprobadas, este mismo flujo podrá transformar cada novedad en un ajuste trazable de pre‑nómina. Por ahora no calculamos dinero con fórmulas genéricas.
     </div>
-  );
+  </main>;
+}
+
+function Metric({icon:Icon,label,value}:{icon:React.ComponentType<{className?:string}>;label:string;value:string}) {
+  return <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4"><div className="flex items-center gap-2 text-zinc-500 text-xs"><Icon className="w-4 h-4"/>{label}</div><div className="text-2xl font-bold text-white mt-2">{value}</div></div>
 }
