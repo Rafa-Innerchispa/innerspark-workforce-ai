@@ -1,495 +1,236 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import GlassWidget from "@/components/GlassWidget";
-import { Users, User, Phone, Mail, MapPin, Plus, Edit2, X, Save, ShieldCheck, Search, Loader2 } from "lucide-react";
+import { Edit2, Loader2, Mail, Phone, Plus, Save, Search, User, Users, X } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
+
+type Employee = {
+  id: string;
+  name: string;
+  firstName?: string;
+  secondName?: string;
+  firstLastName?: string;
+  secondLastName?: string;
+  role?: string;
+  department?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  status?: string;
+  dob?: string;
+};
+
+type EmployeeForm = Omit<Employee, "name">;
+
+const emptyForm: EmployeeForm = {
+  id: "",
+  firstName: "",
+  secondName: "",
+  firstLastName: "",
+  secondLastName: "",
+  role: "",
+  department: "Operaciones",
+  phone: "",
+  email: "",
+  address: "",
+  status: "Activo",
+  dob: "",
+};
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
+}
 
 export default function PeoplePage() {
   const { t } = useI18n();
-  const { activeCompanyId } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<EmployeeForm>(emptyForm);
+  const [error, setError] = useState("");
 
-  const [employees, setEmployees] = useState<any[]>(
-    activeCompanyId === 'femar' 
-      ? mockEmployees.filter(e => e.companyId === activeCompanyId) 
-      : []
-  );
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
+  const loadEmployees = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/employees", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || "No se pudo cargar el personal");
+      setEmployees(Array.isArray(data.employees) ? data.employees : []);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Error cargando personal");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  React.useEffect(() => {
-    const fetchEmps = async () => {
-      try {
-        const res = await fetch('/api/employees');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.employees && data.employees.length > 0) {
-             setEmployees(data.employees);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching employees:", err);
-      } finally {
-        setLoadingEmployees(false);
-      }
-    };
-    fetchEmps();
+  useEffect(() => {
+    void loadEmployees();
   }, []);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return employees;
+    return employees.filter((employee) =>
+      [employee.id, employee.name, employee.department, employee.role, employee.email]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(needle)),
+    );
+  }, [employees, search]);
 
-  // Form State
-  const [formId, setFormId] = useState("");
-  const [formFirstName, setFormFirstName] = useState("");
-  const [formSecondName, setFormSecondName] = useState("");
-  const [formFirstLastName, setFormFirstLastName] = useState("");
-  const [formSecondLastName, setFormSecondLastName] = useState("");
-  const [formDob, setFormDob] = useState("");
-  const [formRole, setFormRole] = useState("");
-  const [formDepartment, setFormDepartment] = useState("Ventas");
-  const [newDepartment, setNewDepartment] = useState("");
-  const [isAddingDepartment, setIsAddingDepartment] = useState(false);
-  const [formPhone, setFormPhone] = useState("");
-  const [formEmail, setFormEmail] = useState("");
-  const [formAddress, setFormAddress] = useState("");
-  const [formStatus, setFormStatus] = useState("Activo");
+  const departments = useMemo(() => {
+    const grouped = new Map<string, Employee[]>();
+    for (const employee of filtered) {
+      const key = employee.department || "Sin departamento";
+      grouped.set(key, [...(grouped.get(key) || []), employee]);
+    }
+    return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [filtered]);
 
-  // Departments List
-  const [departments, setDepartments] = useState([
-    "Directorio Corporativo", "Ventas", "Marketing", "Recursos Humanos", "IT", "Operaciones"
-  ]);
-
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationError, setValidationError] = useState("");
-
-  const handleOpenCreate = () => {
-    setEditingEmployee(null);
-    setFormId("");
-    setFormFirstName("");
-    setFormSecondName("");
-    setFormFirstLastName("");
-    setFormSecondLastName("");
-    setFormDob("");
-    setFormRole("");
-    setFormDepartment("Ventas");
-    setIsAddingDepartment(false);
-    setFormPhone("");
-    setFormEmail("");
-    setFormAddress("");
-    setFormStatus("Activo");
-    setValidationError("");
-    setIsModalOpen(true);
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setError("");
+    setModalOpen(true);
   };
 
-  const handleOpenEdit = (emp: any) => {
-    setEditingEmployee(emp);
-    setFormId(emp.id);
-    setFormFirstName(emp.firstName || "");
-    setFormSecondName(emp.secondName || "");
-    setFormFirstLastName(emp.firstLastName || "");
-    setFormSecondLastName(emp.secondLastName || "");
-    setFormDob(emp.dob || "");
-    setFormRole(emp.role);
-    setFormDepartment(emp.department);
-    if (!departments.includes(emp.department)) {
-      setDepartments([...departments, emp.department]);
-    }
-    setFormPhone(emp.phone);
-    setFormEmail(emp.email);
-    setFormAddress(emp.address);
-    setFormStatus(emp.status);
-    setValidationError("");
-    setIsModalOpen(true);
+  const openEdit = (employee: Employee) => {
+    setEditingId(employee.id);
+    setForm({
+      id: employee.id,
+      firstName: employee.firstName || "",
+      secondName: employee.secondName || "",
+      firstLastName: employee.firstLastName || "",
+      secondLastName: employee.secondLastName || "",
+      role: employee.role || "",
+      department: employee.department || "Operaciones",
+      phone: employee.phone || "",
+      email: employee.email || "",
+      address: employee.address || "",
+      status: employee.status || "Activo",
+      dob: employee.dob || "",
+    });
+    setError("");
+    setModalOpen(true);
   };
 
-  const handleValidateId = async () => {
-    if (!formId.trim()) {
-      setValidationError("Ingrese una cédula/RUC para validar");
-      return;
-    }
-    setIsValidating(true);
-    setValidationError("");
+  const save = async () => {
+    setError("");
+    if (!form.id.trim()) return setError("La identificación es obligatoria");
+    if (!form.firstName?.trim() || !form.firstLastName?.trim()) return setError("Nombre y primer apellido son obligatorios");
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return setError("El correo no tiene un formato válido");
+    if (form.phone && !/^[0-9+()\-\s]+$/.test(form.phone)) return setError("El teléfono contiene caracteres no válidos");
 
+    const name = [form.firstName, form.secondName, form.firstLastName, form.secondLastName]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    setSaving(true);
     try {
-      const res = await fetch("/api/validate-id", {
+      const response = await fetch("/api/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idNumber: formId })
+        body: JSON.stringify({ ...form, name }),
       });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setValidationError(data.error || "Identificación no encontrada en el SRI. Ingrese manualmente.");
-      } else {
-        // Parse names from razonSocial (Assume AP1 AP2 NOM1 NOM2 format roughly)
-        const parts = data.data.razonSocial.trim().split(" ");
-        if (parts.length >= 4) {
-          setFormFirstLastName(parts[0]);
-          setFormSecondLastName(parts[1]);
-          setFormFirstName(parts[2]);
-          setFormSecondName(parts.slice(3).join(" "));
-        } else if (parts.length === 3) {
-          setFormFirstLastName(parts[0]);
-          setFormSecondLastName(parts[1]);
-          setFormFirstName(parts[2]);
-        } else {
-          // Fallback if parsing is ambiguous
-          setFormFirstName(data.data.razonSocial);
-        }
-      }
-    } catch (err) {
-      setValidationError("Error de conexión al validar");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || "No se pudo guardar el empleado");
+      setModalOpen(false);
+      await loadEmployees();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Error guardando empleado");
     } finally {
-      setIsValidating(false);
+      setSaving(false);
     }
   };
-
-  const handleSave = () => {
-    setValidationError("");
-    if (!formId.trim()) return setValidationError("La cédula es requerida");
-    if (!formFirstName.trim() || !formFirstLastName.trim()) return setValidationError("Nombres y apellidos son requeridos");
-    
-    // Phone Validation (Only numbers)
-    const phoneRegex = /^[0-9]+$/;
-    if (formPhone && !phoneRegex.test(formPhone)) return setValidationError("El teléfono solo debe contener números");
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (formEmail && !emailRegex.test(formEmail)) return setValidationError("Formato de correo inválido");
-
-    const activeDept = isAddingDepartment && newDepartment.trim() ? newDepartment.trim() : formDepartment;
-    
-    if (isAddingDepartment && newDepartment.trim() && !departments.includes(newDepartment.trim())) {
-      setDepartments([...departments, newDepartment.trim()]);
-    }
-
-    const fullName = `${formFirstName} ${formSecondName} ${formFirstLastName} ${formSecondLastName}`.replace(/\s+/g, ' ').trim();
-
-    const empData = {
-      id: formId,
-      firstName: formFirstName,
-      secondName: formSecondName,
-      firstLastName: formFirstLastName,
-      secondLastName: formSecondLastName,
-      name: fullName,
-      dob: formDob,
-      role: formRole || "Nuevo Empleado",
-      department: activeDept,
-      phone: formPhone,
-      email: formEmail,
-      address: formAddress,
-      status: formStatus,
-      baseSalary: editingEmployee ? editingEmployee.baseSalary : 500,
-      photo: editingEmployee ? editingEmployee.photo : `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`
-    };
-
-    fetch('/api/employees', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(empData)
-    }).then(res => res.json()).then(data => {
-      if (!data.error) {
-        if (editingEmployee) {
-          setEmployees(employees.map(emp => 
-            emp.id === editingEmployee.id ? { ...emp, ...empData } : emp
-          ));
-        } else {
-          setEmployees([empData, ...employees]);
-        }
-        setIsModalOpen(false);
-      } else {
-        setValidationError(data.error);
-      }
-    }).catch(err => {
-      setValidationError("Error de conexión");
-    });
-  };
-
-  const departmentsMap = employees.reduce((acc, emp) => {
-    acc[emp.department] = (acc[emp.department] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
 
   return (
-    <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-            {t("people")}
-          </h1>
-          <p className="text-sm md:text-base text-zinc-400">
-            Gestión integral de personal y perfiles profesionales
-          </p>
+    <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.24em] text-blue-400 font-semibold">Workforce • People</div>
+          <h1 className="text-3xl md:text-4xl font-bold mt-2">{t("people")}</h1>
+          <p className="text-zinc-400 mt-2">Directorio real del tenant. Altas y cambios se sincronizan con el backend y los dispositivos autorizados.</p>
         </div>
-        <button 
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors font-medium text-sm shadow-[0_0_15px_rgba(37,99,235,0.3)] w-fit"
-        >
-          <Plus className="w-4 h-4" /> Agregar Personal
+        <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold">
+          <Plus className="w-4 h-4" /> Agregar personal
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        {Object.entries(departmentsMap).map(([dept, count]) => (
-          <GlassWidget key={dept} title={`${dept} (${count} empleados)`} icon={Users}>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-4">
-              {employees.filter(e => e.department === dept).map((employee) => (
-                <div key={employee.id} className="relative overflow-hidden group border border-zinc-700/50 bg-zinc-800/30 rounded-2xl p-5 hover:border-blue-500/50 hover:bg-zinc-800/50 transition-all flex flex-col h-full">
-                  <div className="absolute top-4 right-4 flex gap-2">
-                    <button 
-                      onClick={() => handleOpenEdit(employee)}
-                      className="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                      title="Editar Empleado"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium border h-fit ${
-                      employee.status === "Activo" ? "bg-green-500/10 text-green-400 border-green-500/30" : 
-                      employee.status === "Liquidado" ? "bg-red-500/10 text-red-400 border-red-500/30" :
-                      employee.status === "Vacaciones" ? "bg-blue-500/10 text-blue-400 border-blue-500/30" :
-                      "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
-                    }`}>
-                      {employee.status}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 mb-4 mt-2">
-                    <div className="relative flex-shrink-0">
-                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-zinc-700 group-hover:border-blue-500 transition-colors">
-                        <img src={employee.photo} alt={employee.firstName} className="w-full h-full object-cover" />
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-zinc-200">
-                        {employee.name}
-                      </h3>
-                      <p className="text-sm text-blue-400">{employee.role}</p>
-                      <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
-                        <ShieldCheck className="w-3 h-3" /> {employee.department}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 mt-auto pt-4 border-t border-zinc-700/50">
-                    <div className="flex items-center gap-3 text-sm text-zinc-400">
-                      <User className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-                      <span className="font-mono text-zinc-300">C.I. {employee.id}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-zinc-400">
-                      <Phone className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-                      <span>{employee.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-zinc-400">
-                      <Mail className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-                      <span className="truncate" title={employee.email}>{employee.email}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </GlassWidget>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-500 text-sm">Personas</div><div className="text-3xl font-bold mt-1">{employees.length}</div></div>
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-500 text-sm">Departamentos</div><div className="text-3xl font-bold mt-1">{new Set(employees.map((employee) => employee.department).filter(Boolean)).size}</div></div>
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-zinc-500 text-sm">Activos</div><div className="text-3xl font-bold mt-1">{employees.filter((employee) => (employee.status || "Activo").toLowerCase() === "activo").length}</div></div>
       </div>
 
-      {/* Modal Crear/Editar */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 sticky top-0 bg-zinc-900 pt-2 pb-4 border-b border-zinc-800 z-10">
-              <h2 className="text-xl font-bold text-white">
-                {editingEmployee ? "Editar Empleado" : "Agregar Nuevo Personal"}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <div className="relative max-w-xl">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nombre, cédula, departamento, cargo o correo..." className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:border-blue-500" />
+      </div>
 
-            {validationError && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
-                {validationError}
-              </div>
-            )}
+      {error && !modalOpen && <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 p-4">{error}</div>}
 
-            <div className="space-y-4">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className="block text-sm text-zinc-400 mb-1">Cédula de Identidad / RUC *</label>
-                  <input 
-                    type="text"
-                    value={formId}
-                    onChange={(e) => setFormId(e.target.value)}
-                    disabled={!!editingEmployee}
-                    placeholder="Ej. 1790000000"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                {!editingEmployee && (
-                  <button 
-                    onClick={handleValidateId}
-                    disabled={isValidating || !formId}
-                    className="px-4 py-2 bg-zinc-800 border border-zinc-700 hover:border-blue-500 hover:text-blue-400 text-zinc-300 rounded-lg transition-colors flex items-center gap-2 font-medium disabled:opacity-50"
-                  >
-                    {isValidating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    Validar Cédula
-                  </button>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Primer Nombre *</label>
-                  <input 
-                    type="text"
-                    value={formFirstName}
-                    onChange={(e) => setFormFirstName(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Segundo Nombre</label>
-                  <input 
-                    type="text"
-                    value={formSecondName}
-                    onChange={(e) => setFormSecondName(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Primer Apellido *</label>
-                  <input 
-                    type="text"
-                    value={formFirstLastName}
-                    onChange={(e) => setFormFirstLastName(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Segundo Apellido</label>
-                  <input 
-                    type="text"
-                    value={formSecondLastName}
-                    onChange={(e) => setFormSecondLastName(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Fecha de Nacimiento</label>
-                  <input 
-                    type="date"
-                    value={formDob}
-                    onChange={(e) => setFormDob(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Cargo / Rol</label>
-                  <input 
-                    type="text"
-                    value={formRole}
-                    onChange={(e) => setFormRole(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Grupo / Departamento</label>
-                {!isAddingDepartment ? (
-                  <div className="flex gap-2">
-                    <select 
-                      value={formDepartment}
-                      onChange={(e) => setFormDepartment(e.target.value)}
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                    >
-                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <button 
-                      onClick={() => setIsAddingDepartment(true)}
-                      className="px-3 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 rounded-lg text-sm text-zinc-300"
-                    >
-                      + Nuevo
-                    </button>
+      {loading ? (
+        <div className="py-16 flex justify-center text-zinc-500"><Loader2 className="w-6 h-6 animate-spin" /></div>
+      ) : departments.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-zinc-700 p-12 text-center text-zinc-500">No hay empleados para mostrar. Agrega la primera persona o cambia el filtro.</div>
+      ) : departments.map(([department, members]) => (
+        <GlassWidget key={department} title={`${department} (${members.length})`} icon={Users}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-4">
+            {members.map((employee) => (
+              <div key={employee.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 flex flex-col gap-4 hover:border-blue-500/40 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 shrink-0">{initials(employee.name)}</div>
+                    <div className="min-w-0"><div className="font-semibold text-zinc-100 truncate">{employee.name}</div><div className="text-xs text-zinc-500 mt-1">C.I. {employee.id}</div></div>
                   </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      value={newDepartment}
-                      onChange={(e) => setNewDepartment(e.target.value)}
-                      placeholder="Nombre del nuevo departamento"
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                    <button 
-                      onClick={() => setIsAddingDepartment(false)}
-                      className="px-3 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 rounded-lg text-sm text-zinc-300"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Teléfono (Solo números)</label>
-                  <input 
-                    type="text"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
+                  <button onClick={() => openEdit(employee)} className="p-2 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10"><Edit2 className="w-4 h-4" /></button>
                 </div>
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Correo Electrónico</label>
-                  <input 
-                    type="email"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
+                <div className="text-sm text-zinc-400 space-y-2">
+                  <div className="flex gap-2"><User className="w-4 h-4 mt-0.5" /><span>{employee.role || "Sin cargo definido"}</span></div>
+                  {employee.phone && <div className="flex gap-2"><Phone className="w-4 h-4 mt-0.5" /><span>{employee.phone}</span></div>}
+                  {employee.email && <div className="flex gap-2 min-w-0"><Mail className="w-4 h-4 mt-0.5 shrink-0" /><span className="truncate">{employee.email}</span></div>}
                 </div>
+                <div><span className="inline-flex px-2.5 py-1 rounded-full text-xs border border-zinc-700 bg-zinc-800 text-zinc-300">{employee.status || "Activo"}</span></div>
               </div>
+            ))}
+          </div>
+        </GlassWidget>
+      ))}
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Estado</label>
-                <select 
-                  value={formStatus}
-                  onChange={(e) => setFormStatus(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option>Activo</option>
-                  <option>Inactivo</option>
-                  <option>Vacaciones</option>
-                  <option>Permiso Médico</option>
-                  <option>Permiso por Maternidad</option>
-                  <option>Liquidado</option>
-                </select>
-              </div>
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-6"><div><div className="text-xs uppercase tracking-[0.2em] text-blue-400">People</div><h2 className="text-xl font-bold mt-1">{editingId ? "Editar persona" : "Nueva persona"}</h2></div><button onClick={() => setModalOpen(false)} className="p-2 text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Cédula / ID"><input disabled={Boolean(editingId)} value={form.id} onChange={(event) => setForm({ ...form, id: event.target.value })} className="field" /></Field>
+              <Field label="Fecha de nacimiento"><input type="date" value={form.dob || ""} onChange={(event) => setForm({ ...form, dob: event.target.value })} className="field" /></Field>
+              <Field label="Primer nombre"><input value={form.firstName || ""} onChange={(event) => setForm({ ...form, firstName: event.target.value })} className="field" /></Field>
+              <Field label="Segundo nombre"><input value={form.secondName || ""} onChange={(event) => setForm({ ...form, secondName: event.target.value })} className="field" /></Field>
+              <Field label="Primer apellido"><input value={form.firstLastName || ""} onChange={(event) => setForm({ ...form, firstLastName: event.target.value })} className="field" /></Field>
+              <Field label="Segundo apellido"><input value={form.secondLastName || ""} onChange={(event) => setForm({ ...form, secondLastName: event.target.value })} className="field" /></Field>
+              <Field label="Cargo"><input value={form.role || ""} onChange={(event) => setForm({ ...form, role: event.target.value })} className="field" /></Field>
+              <Field label="Departamento"><input value={form.department || ""} onChange={(event) => setForm({ ...form, department: event.target.value })} className="field" /></Field>
+              <Field label="Teléfono"><input value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} className="field" /></Field>
+              <Field label="Correo"><input type="email" value={form.email || ""} onChange={(event) => setForm({ ...form, email: event.target.value })} className="field" /></Field>
+              <Field label="Estado"><select value={form.status || "Activo"} onChange={(event) => setForm({ ...form, status: event.target.value })} className="field"><option>Activo</option><option>Vacaciones</option><option>Licencia</option><option>Inactivo</option><option>Liquidado</option></select></Field>
+              <Field label="Dirección"><input value={form.address || ""} onChange={(event) => setForm({ ...form, address: event.target.value })} className="field" /></Field>
             </div>
-
-            <div className="mt-8 flex gap-3 justify-end sticky bottom-0 bg-zinc-900 pt-4 border-t border-zinc-800">
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors font-medium text-sm"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleSave}
-                disabled={!formId.trim() || !formFirstName.trim() || !formFirstLastName.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium text-sm flex items-center gap-2 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" /> Guardar Perfil
-              </button>
-            </div>
+            {error && <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 p-3 text-sm">{error}</div>}
+            <div className="mt-6 flex justify-end gap-3"><button onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-200">Cancelar</button><button disabled={saving} onClick={() => void save()} className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold flex items-center gap-2">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar</button></div>
           </div>
         </div>
       )}
+
+      <style jsx>{`.field{width:100%;background:#18181b;border:1px solid #3f3f46;border-radius:.75rem;padding:.7rem .8rem;color:#fff;outline:none}.field:focus{border-color:#3b82f6}.field:disabled{opacity:.55;cursor:not-allowed}`}</style>
     </main>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block"><span className="block text-sm text-zinc-400 mb-1.5">{label}</span>{children}</label>;
 }
