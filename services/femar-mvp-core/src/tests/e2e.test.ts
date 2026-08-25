@@ -15,7 +15,8 @@ jest.mock('firebase-admin/firestore', () => {
   const mockAdd = jest.fn();
   const mockSet = jest.fn().mockResolvedValue(true);
   const mockLimit = jest.fn().mockReturnValue({ get: mockGet });
-  const mockDoc = jest.fn().mockReturnValue({ set: mockSet });
+  const mockDocGet = jest.fn().mockResolvedValue({ exists: false, data: () => undefined });
+  const mockDoc = jest.fn().mockReturnValue({ set: mockSet, get: mockDocGet });
   const mockCollection = jest.fn().mockReturnValue({ limit: mockLimit, add: mockAdd, doc: mockDoc });
 
   const mockBatchCommit = jest.fn();
@@ -74,7 +75,7 @@ describe('E2E Endpoints', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should write synthetic checkin to firestore with test_ prefix', async () => {
+    it('should write synthetic checkin to firestore without inventing tenant ownership', async () => {
       const logData = "1\t2023-01-01 10:00:00\t1\t1\t0\t0\t0";
       const req = {
         method: 'POST',
@@ -90,6 +91,7 @@ describe('E2E Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(text).toBe('OK');
+      expect(db.collection).toHaveBeenCalledWith('devices');
       expect(db.collection).toHaveBeenCalledWith('adms_logs');
       expect(db.batch().commit).toHaveBeenCalled();
     });
