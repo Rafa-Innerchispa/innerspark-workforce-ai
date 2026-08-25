@@ -1,440 +1,212 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import GlassWidget from "@/components/GlassWidget";
-import { Server, Activity, Plus, ShieldCheck, Search, Wifi, Clock, Fingerprint, Terminal, User } from "lucide-react";
-import { useI18n } from "@/contexts/I18nContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { mockEmployees } from "@/lib/mockData";
-import Link from "next/link";
+import { Activity, Clock, Edit2, Fingerprint, Loader2, RefreshCw, Server, ShieldCheck, Terminal, Wifi, X } from "lucide-react";
+
+type Device = {
+  id: string;
+  name?: string;
+  ip?: string;
+  location?: string;
+  model?: string;
+  status?: string;
+  lastSync?: string;
+};
+
+type AttendanceLog = {
+  id: string;
+  user_id?: string;
+  timestamp?: string;
+  state?: string;
+  serial_number?: string;
+};
+
+type CommandLog = {
+  id: string;
+  deviceId?: string;
+  command?: string;
+  status?: string;
+  returnCode?: string;
+  createdAt?: string;
+};
+
+type Employee = { id: string; name: string };
+
+const stateLabels: Record<string, string> = {
+  "0": "Entrada",
+  "1": "Salida",
+  "2": "Descanso • salida",
+  "3": "Descanso • entrada",
+  "4": "Horas extra • entrada",
+  "5": "Horas extra • salida",
+  "255": "No definido",
+};
 
 export default function DevicesPage() {
-  const { t } = useI18n();
-  const { activeCompanyId } = useAuth();
-  
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
-  const [pendingDevices, setPendingDevices] = useState<any[]>([]);
-  const [activeDevices, setActiveDevices] = useState<any[]>([]);
-  const [realtimeLogs, setRealtimeLogs] = useState<any[]>([]);
-  const [commandLogs, setCommandLogs] = useState<any[]>([]);
+  const [pending, setPending] = useState<Device[]>([]);
+  const [active, setActive] = useState<Device[]>([]);
+  const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [commands, setCommands] = useState<CommandLog[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingDevice, setEditingDevice] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', location: '', model: '' });
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [editing, setEditing] = useState<Device | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", location: "", model: "" });
 
-  const fetchDevices = async () => {
+  const employeeNames = useMemo(() => new Map(employees.map((employee) => [employee.id, employee.name])), [employees]);
+
+  const refresh = async (silent = false) => {
+    if (silent) setRefreshing(true);
     try {
-      const res = await fetch('/api/devices');
-      if (res.ok) {
-        const data = await res.json();
-        setPendingDevices(data.pending || []);
-        setActiveDevices(data.active || []);
-      }
-      
-      const logsRes = await fetch('/api/logs/realtime');
-      if (logsRes.ok) {
-        const logsData = await logsRes.json();
-        setRealtimeLogs(logsData.logs || []);
-      }
-      
-      const cmdsRes = await fetch('/api/logs/commands');
-      if (cmdsRes.ok) {
-        const cmdsData = await cmdsRes.json();
-        setCommandLogs(cmdsData.commands || []);
-      }
-    } catch (error) {
-      console.error("Error fetching devices:", error);
+      const [devicesRes, logsRes, commandsRes, employeesRes] = await Promise.all([
+        fetch("/api/devices", { cache: "no-store" }),
+        fetch("/api/logs/realtime", { cache: "no-store" }),
+        fetch("/api/logs/commands", { cache: "no-store" }),
+        fetch("/api/employees", { cache: "no-store" }),
+      ]);
+
+      const [devicesData, logsData, commandsData, employeesData] = await Promise.all([
+        devicesRes.json(), logsRes.json(), commandsRes.json(), employeesRes.json(),
+      ]);
+
+      if (!devicesRes.ok) throw new Error(devicesData.error || devicesData.message || "No se pudieron cargar los equipos");
+      if (!logsRes.ok) throw new Error(logsData.error || logsData.message || "No se pudieron cargar las marcaciones");
+      if (!commandsRes.ok) throw new Error(commandsData.error || commandsData.message || "No se pudieron cargar los comandos");
+      if (!employeesRes.ok) throw new Error(employeesData.error || employeesData.message || "No se pudieron cargar los empleados");
+
+      setPending(Array.isArray(devicesData.pending) ? devicesData.pending : []);
+      setActive(Array.isArray(devicesData.active) ? devicesData.active : []);
+      setLogs(Array.isArray(logsData.logs) ? logsData.logs : []);
+      setCommands(Array.isArray(commandsData.commands) ? commandsData.commands : []);
+      setEmployees(Array.isArray(employeesData.employees) ? employeesData.employees : []);
+      setError("");
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Error cargando la consola de dispositivos");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchDevices();
-    const interval = setInterval(fetchDevices, 3000); // Poll every 3 seconds
-    return () => clearInterval(interval);
+    const first = window.setTimeout(() => void refresh(), 0);
+    const interval = window.setInterval(() => void refresh(true), 15000);
+    return () => { window.clearTimeout(first); window.clearInterval(interval); };
   }, []);
 
-  const handleApprove = async (id: string) => {
+  const mutateDevice = async (path: string, payload: Record<string, unknown>) => {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || data.message || "No se pudo actualizar el equipo");
+    await refresh(true);
+  };
+
+  const approve = async (id: string) => {
+    try { await mutateDevice("/api/devices/approve", { id }); }
+    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : "No se pudo aprobar el equipo"); }
+  };
+
+  const ignore = async (id: string) => {
+    try { await mutateDevice("/api/devices/ignore", { id }); }
+    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : "No se pudo ignorar el equipo"); }
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
     try {
-      const res = await fetch('/api/devices/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      });
-      if (res.ok) {
-        fetchDevices(); // Refresh immediately
-      }
-    } catch (e) {
-      console.error("Error approving device:", e);
+      await mutateDevice("/api/devices/update", { id: editing.id, ...editForm });
+      setEditing(null);
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : "No se pudo actualizar el equipo");
     }
   };
 
-  const handleIgnore = async (id: string) => {
-    try {
-      const res = await fetch('/api/devices/ignore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      });
-      if (res.ok) {
-        fetchDevices(); // Refresh immediately
-      }
-    } catch (e) {
-      console.error("Error ignoring device:", e);
-    }
-  };
-
-  const handleUpdateDevice = async (id: string) => {
-    try {
-      const res = await fetch('/api/devices/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...editForm })
-      });
-      if (res.ok) {
-        setEditingDevice(null);
-        fetchDevices();
-      }
-    } catch (e) {
-      console.error("Error updating device:", e);
-    }
-  };
-
-  const formatTime = (isoString: string) => {
-    if (!isoString) return "Desconocido";
-    try {
-      const date = new Date(isoString);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (' + date.toLocaleDateString() + ')';
-    } catch (e) {
-      return isoString;
-    }
+  const formatDate = (value?: string) => {
+    if (!value) return "Sin registro";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString("es-EC");
   };
 
   return (
-    <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6 md:gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-          {t("devices")}
-        </h1>
-        <p className="text-sm md:text-base text-zinc-400">
-          Monitoreo y administración de hardware biométrico ZKTeco
-        </p>
-      </div>
-
-      <div className="bg-zinc-800/60 border border-blue-500/30 rounded-2xl p-6 mb-2">
-        <h2 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2">
-          <Wifi className="w-5 h-5" /> Configuración de tu Reloj ZKTeco
-        </h2>
-        <p className="text-zinc-300 mb-4 text-sm leading-relaxed">
-          Para conectar tu equipo biométrico a la nube, entra al menú del reloj y ve a <strong>Red &gt; Configuración del Servidor en la Nube (ADMS)</strong> e ingresa los siguientes datos exactos. El equipo aparecerá abajo en "Solicitudes Pendientes" inmediatamente.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-700/50">
-            <p className="text-xs text-zinc-500 mb-1">Dirección del Servidor (Server Address)</p>
-            <p className="font-mono text-lg text-white font-bold tracking-wider">104.197.119.150</p>
-          </div>
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-700/50">
-            <p className="text-xs text-zinc-500 mb-1">Puerto del Servidor (Server Port)</p>
-            <p className="font-mono text-lg text-white font-bold tracking-wider">80</p>
-          </div>
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-700/50">
-            <p className="text-xs text-zinc-500 mb-1">Habilitar Nombre de Dominio (Enable Domain Name)</p>
-            <p className="font-mono text-lg text-white font-bold tracking-wider text-red-400">NO / DESACTIVADO</p>
-          </div>
+    <main className="p-4 md:p-8 w-full max-w-7xl mx-auto flex flex-col gap-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.24em] text-blue-400 font-semibold">Workforce • Device Hub</div>
+          <h1 className="text-3xl md:text-4xl font-bold mt-2">Dispositivos y biometría</h1>
+          <p className="text-zinc-400 mt-2 max-w-3xl">Equipos, marcaciones y comandos filtrados en servidor por empresa. La consola ya no recibe datos de otros tenants para filtrarlos después.</p>
         </div>
+        <button onClick={() => void refresh(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-200">
+          {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Actualizar
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GlassWidget title="Solicitudes Pendientes (Push)" icon={Server}>
-          <div className="flex flex-col gap-3 p-4">
-            {loading ? (
-              <div className="flex justify-center p-8 text-zinc-500">
-                <Activity className="w-6 h-6 animate-spin" />
+      {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 p-4">{error}</div>}
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Metric label="Equipos activos" value={active.length} />
+        <Metric label="Pendientes" value={pending.length} />
+        <Metric label="Marcaciones recientes" value={logs.length} />
+        <Metric label="Comandos recientes" value={commands.length} />
+      </div>
+
+      <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5">
+        <div className="flex items-center gap-2 text-blue-300 font-semibold"><Wifi className="w-4 h-4" /> Conexión ADMS</div>
+        <p className="text-sm text-zinc-400 mt-2">Configura el reloj con el endpoint ADMS publicado para tu entorno. No mostramos aquí direcciones IP hardcodeadas porque cambian entre staging, producción y despliegues regionales.</p>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <GlassWidget title={`Pendientes (${pending.length})`} icon={Server}>
+          <div className="p-4 flex flex-col gap-3">
+            {loading ? <Loading /> : pending.length === 0 ? <Empty text="No hay equipos pendientes." /> : pending.map((device) => (
+              <div key={device.id} className="rounded-xl border border-yellow-500/20 bg-zinc-900/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div><div className="font-semibold">SN: {device.id}</div><div className="text-xs text-zinc-500 mt-1">IP: {device.ip || "no reportada"} • {formatDate(device.lastSync)}</div></div>
+                <div className="flex gap-2"><button onClick={() => void ignore(device.id)} className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-300 text-sm">Ignorar</button><button onClick={() => void approve(device.id)} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Aprobar</button></div>
               </div>
-            ) : pendingDevices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-8 text-zinc-500 gap-2 text-center">
-                <Wifi className="w-8 h-8 mb-2 opacity-50" />
-                <p>No hay equipos intentando conectarse a la red en este momento.</p>
-                <p className="text-xs opacity-70">Asegúrese de configurar el ADMS Server en su reloj ZKTeco apuntando a la nube.</p>
-              </div>
-            ) : (
-              pendingDevices.map((device, idx) => (
-                <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-zinc-800/40 rounded-xl border border-yellow-500/20 hover:border-yellow-500/40 transition-colors gap-4">
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <div className="p-2 bg-yellow-500/10 rounded-lg">
-                      <Server className="w-5 h-5 text-yellow-500" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-zinc-200">SN: {device.id}</h3>
-                      <p className="text-xs text-zinc-400 flex items-center gap-1 mt-1">
-                        IP: {device.ip}
-                      </p>
-                      <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
-                        <Clock className="w-3 h-3" /> Último ping: {formatTime(device.lastSync)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                    <button 
-                      onClick={() => handleIgnore(device.id)}
-                      className="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors border border-zinc-700"
-                    >
-                      Ignorar
-                    </button>
-                    <button 
-                      onClick={() => handleApprove(device.id)}
-                      className="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-1"
-                    >
-                      <ShieldCheck className="w-3 h-3" /> Aprobar
-                    </button>
-                  </div>
+            ))}
+          </div>
+        </GlassWidget>
+
+        <GlassWidget title={`Activos (${active.length})`} icon={Activity}>
+          <div className="p-4 flex flex-col gap-3">
+            {loading ? <Loading /> : active.length === 0 ? <Empty text="No hay equipos activos." /> : active.map((device) => (
+              <div key={device.id} className="rounded-xl border border-green-500/20 bg-zinc-900/60 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div><div className="font-semibold">{device.name || `SN: ${device.id}`}</div><div className="text-xs text-zinc-500 mt-1">{device.name ? `SN: ${device.id} • ` : ""}{device.location || "Sin ubicación"}{device.model ? ` • ${device.model}` : ""}</div></div>
+                  <button onClick={() => { setEditing(device); setEditForm({ name: device.name || "", location: device.location || "", model: device.model || "" }); }} className="p-2 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10"><Edit2 className="w-4 h-4" /></button>
                 </div>
-              ))
-            )}
-          </div>
-        </GlassWidget>
-
-        <GlassWidget title="Equipos Aprobados (En Línea)" icon={Activity}>
-          <div className="flex justify-between items-center mb-2 mt-4 px-4 border-b border-zinc-800 pb-2">
-            <span className="text-xs text-zinc-400">Sincronización manual</span>
-            <button 
-              onClick={async () => {
-                try {
-                  const res = await fetch('/api/sync-test');
-                  const data = await res.json();
-                  if(data.success) {
-                    alert(`¡Sincronización Iniciada!\nSe han encolado ${data.queued} comandos hacia los dispositivos.\nRevisa la pantalla del equipo en unos segundos.`);
-                  } else {
-                    alert(`Error: ${data.message || 'No se pudo sincronizar'}`);
-                  }
-                } catch(e) {
-                  alert('Error de conexión al sincronizar.');
-                }
-              }}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)] rounded-lg text-xs transition-colors flex items-center gap-2"
-            >
-              Forzar Sincronización de Usuarios
-            </button>
-          </div>
-          <div className="flex flex-col gap-3 p-4 pt-2">
-            {loading ? (
-              <div className="flex justify-center p-8 text-zinc-500">
-                <Activity className="w-6 h-6 animate-spin" />
+                <div className="mt-3 text-xs text-zinc-500 flex items-center gap-1"><Clock className="w-3 h-3" /> Última señal: {formatDate(device.lastSync)}</div>
               </div>
-            ) : activeDevices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-8 text-zinc-500 gap-2 text-center">
-                <Activity className="w-8 h-8 mb-2 opacity-50" />
-                <p>No hay equipos aprobados en línea.</p>
-              </div>
-            ) : (
-              activeDevices.map((device, idx) => (
-                <div key={idx} className="flex flex-col p-4 bg-zinc-800/50 rounded-xl border border-green-500/20 hover:border-green-500/40 transition-colors gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
-                      <div>
-                        <h3 className="font-bold text-zinc-200">
-                          {device.name ? device.name : `SN: ${device.id}`}
-                        </h3>
-                        {device.name && <p className="text-xs text-zinc-400">SN: {device.id}</p>}
-                        <p className="text-xs text-zinc-400 mt-0.5">
-                          IP: {device.ip} {device.location && `| Ubicación: ${device.location}`} {device.model && `| Modelo: ${device.model}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right flex flex-col items-end gap-2">
-                      <span className="text-xs font-medium text-green-400 bg-green-400/10 px-2 py-1 rounded border border-green-500/20">
-                        En Línea
-                      </span>
-                      <button 
-                        onClick={() => {
-                          setEditingDevice(device.id);
-                          setEditForm({ name: device.name || '', location: device.location || '', model: device.model || '' });
-                        }}
-                        className="text-xs text-blue-400 hover:text-blue-300 underline"
-                      >
-                        Editar Datos
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {editingDevice === device.id && (
-                    <div className="mt-2 p-3 bg-zinc-900 rounded-lg border border-zinc-700">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                        <div>
-                          <label className="block text-xs text-zinc-400 mb-1">Nombre Descriptivo</label>
-                          <input 
-                            type="text" 
-                            value={editForm.name}
-                            onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                            placeholder="Ej. Reloj Recepción" 
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-zinc-400 mb-1">Ubicación</label>
-                          <input 
-                            type="text" 
-                            value={editForm.location}
-                            onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                            placeholder="Ej. Planta Baja, Quito" 
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-zinc-400 mb-1">Modelo ZKTeco</label>
-                          <input 
-                            type="text" 
-                            value={editForm.model}
-                            onChange={(e) => setEditForm({...editForm, model: e.target.value})}
-                            placeholder="Ej. SpeedFace V5L" 
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => setEditingDevice(null)}
-                          className="px-3 py-1.5 bg-zinc-800 text-zinc-300 text-xs rounded hover:bg-zinc-700"
-                        >
-                          Cancelar
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateDevice(device.id)}
-                          className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-500"
-                        >
-                          Guardar Cambios
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center gap-1 justify-end mt-1 pt-2 border-t border-zinc-700/50">
-                    <Clock className="w-3 h-3 text-zinc-500" /> 
-                    <span className="text-xs text-zinc-500">
-                      Último ping: {formatTime(device.lastSync)}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
+            ))}
           </div>
         </GlassWidget>
       </div>
 
-      <div className="mt-2">
-        <GlassWidget title="Monitor de Marcaciones (Tiempo Real)" icon={Fingerprint}>
-          <div className="p-0 overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
-              <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Fecha y Hora</th>
-                  <th className="px-6 py-4 font-medium">ID de Usuario</th>
-                  <th className="px-6 py-4 font-medium">Estado ZKTeco</th>
-                  <th className="px-6 py-4 font-medium">Equipo (SN)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {realtimeLogs.filter((log: any) => companyEmployees.some(ce => ce.id === log.user_id)).length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
-                      No hay marcaciones recientes en la base de datos para esta empresa.
-                    </td>
-                  </tr>
-                ) : (
-                  realtimeLogs
-                    .filter((log: any) => companyEmployees.some(ce => ce.id === log.user_id))
-                    .map((log: any, i: number) => {
-                    const emp = companyEmployees.find(e => e.id === log.user_id);
-                    const empName = emp ? emp.name : "Usuario Desconocido";
-                    
-                    let stateLabel = log.state;
-                    let stateBadge = "bg-zinc-800 text-zinc-400 border-zinc-700";
-                    switch(log.state) {
-                      case "0": stateLabel = "Entrada"; stateBadge = "bg-green-500/20 text-green-400 border-green-500/30"; break;
-                      case "1": stateLabel = "Salida"; stateBadge = "bg-red-500/20 text-red-400 border-red-500/30"; break;
-                      case "2": stateLabel = "Descanso (Salida)"; stateBadge = "bg-orange-500/20 text-orange-400 border-orange-500/30"; break;
-                      case "3": stateLabel = "Descanso (Entrada)"; stateBadge = "bg-blue-500/20 text-blue-400 border-blue-500/30"; break;
-                      case "4": stateLabel = "Horas Extras (Entrada)"; stateBadge = "bg-purple-500/20 text-purple-400 border-purple-500/30"; break;
-                      case "5": stateLabel = "Horas Extras (Salida)"; stateBadge = "bg-pink-500/20 text-pink-400 border-pink-500/30"; break;
-                      case "255": stateLabel = "No Definido"; break;
-                    }
+      <GlassWidget title="Marcaciones recientes" icon={Fingerprint}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm"><thead className="text-zinc-500 border-b border-zinc-800"><tr><th className="text-left p-4">Fecha</th><th className="text-left p-4">Empleado</th><th className="text-left p-4">Evento</th><th className="text-left p-4">Equipo</th></tr></thead><tbody className="divide-y divide-zinc-900">{logs.length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-zinc-500">Sin marcaciones recientes.</td></tr> : logs.map((log) => <tr key={log.id}><td className="p-4 text-zinc-300">{formatDate(log.timestamp)}</td><td className="p-4"><div className="font-medium">{employeeNames.get(String(log.user_id || "")) || "Empleado"}</div><div className="text-xs text-zinc-500">{log.user_id || "sin ID"}</div></td><td className="p-4"><span className="px-2.5 py-1 rounded-full border border-zinc-700 bg-zinc-800 text-xs">{stateLabels[String(log.state || "")] || `Estado ${log.state || "?"}`}</span></td><td className="p-4 text-zinc-500 font-mono text-xs">{log.serial_number || "-"}</td></tr>)}</tbody></table>
+        </div>
+      </GlassWidget>
 
-                    return (
-                      <tr key={i} className="hover:bg-zinc-800/40 transition-colors animate-in fade-in">
-                        <td className="px-6 py-4 font-medium text-blue-400">{log.timestamp}</td>
-                        <td className="px-6 py-4">
-                          <Link href={`/people?id=${log.user_id}`} className="hover:underline flex items-center gap-2 group">
-                            <span className="font-bold text-white text-lg group-hover:text-blue-400 transition-colors">{log.user_id}</span>
-                            <span className="text-zinc-400 text-sm hidden md:inline-block truncate max-w-[200px]">({empName})</span>
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded border font-mono text-xs ${stateBadge}`}>
-                            {stateLabel} ({log.state})
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-zinc-500 text-xs font-mono">{log.serial_number}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </GlassWidget>
-      </div>
+      <GlassWidget title="Comandos ADMS" icon={Terminal}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm"><thead className="text-zinc-500 border-b border-zinc-800"><tr><th className="text-left p-4">Fecha</th><th className="text-left p-4">Equipo</th><th className="text-left p-4">Comando</th><th className="text-left p-4">Estado</th></tr></thead><tbody className="divide-y divide-zinc-900">{commands.length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-zinc-500">Sin comandos recientes.</td></tr> : commands.map((command) => <tr key={command.id}><td className="p-4 text-zinc-300">{formatDate(command.createdAt)}</td><td className="p-4 font-mono text-xs text-zinc-400">{command.deviceId || "-"}</td><td className="p-4 font-mono text-xs text-zinc-400 max-w-[420px] truncate" title={command.command}>{command.command || "-"}</td><td className="p-4"><span className="px-2.5 py-1 rounded-full border border-zinc-700 bg-zinc-800 text-xs uppercase">{command.status || "unknown"}</span></td></tr>)}</tbody></table>
+        </div>
+      </GlassWidget>
 
-      <div className="mt-2">
-        <GlassWidget title="Consola de Comandos ADMS (Sincronización)" icon={Terminal}>
-          <div className="p-0 overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
-              <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Fecha y Hora</th>
-                  <th className="px-6 py-4 font-medium">Comando</th>
-                  <th className="px-6 py-4 font-medium">Estado</th>
-                  <th className="px-6 py-4 font-medium">ACK (Respuesta)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {commandLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
-                      No hay comandos recientes en la base de datos.
-                    </td>
-                  </tr>
-                ) : (
-                  commandLogs.map((cmd: any, i: number) => {
-                    let statusColor = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-                    if (cmd.status === "sent") statusColor = "bg-blue-500/20 text-blue-400 border-blue-500/30";
-                    if (cmd.status === "completed") statusColor = "bg-green-500/20 text-green-400 border-green-500/30";
-                    
-                    return (
-                      <tr key={i} className="hover:bg-zinc-800/40 transition-colors animate-in fade-in">
-                        <td className="px-6 py-4 font-medium text-blue-400 text-xs">
-                          {new Date(cmd.createdAt).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-zinc-300 font-mono text-xs max-w-[300px] truncate" title={cmd.command}>
-                          {cmd.command}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded border font-medium text-xs ${statusColor}`}>
-                            {cmd.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-zinc-400 font-mono text-xs">
-                          {cmd.returnCode || "-"}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </GlassWidget>
-      </div>
+      {editing && <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"><div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 p-6"><div className="flex items-center justify-between"><h2 className="text-xl font-bold">Editar equipo</h2><button onClick={() => setEditing(null)} className="p-2 text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button></div><div className="grid gap-4 mt-5"><Field label="Nombre"><input className="field" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></Field><Field label="Ubicación"><input className="field" value={editForm.location} onChange={(event) => setEditForm({ ...editForm, location: event.target.value })} /></Field><Field label="Modelo"><input className="field" value={editForm.model} onChange={(event) => setEditForm({ ...editForm, model: event.target.value })} /></Field></div><div className="flex justify-end gap-3 mt-6"><button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl bg-zinc-800">Cancelar</button><button onClick={() => void saveEdit()} className="px-4 py-2 rounded-xl bg-blue-600 text-white">Guardar</button></div></div></div>}
+
+      <style jsx>{`.field{width:100%;background:#18181b;border:1px solid #3f3f46;border-radius:.75rem;padding:.7rem .8rem;color:#fff;outline:none}.field:focus{border-color:#3b82f6}`}</style>
     </main>
   );
 }
+
+function Metric({ label, value }: { label: string; value: number }) { return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5"><div className="text-sm text-zinc-500">{label}</div><div className="text-3xl font-bold mt-1">{value}</div></div>; }
+function Loading() { return <div className="py-10 flex justify-center text-zinc-500"><Loader2 className="w-5 h-5 animate-spin" /></div>; }
+function Empty({ text }: { text: string }) { return <div className="py-10 text-center text-zinc-500">{text}</div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="block text-sm text-zinc-400 mb-1.5">{label}</span>{children}</label>; }
