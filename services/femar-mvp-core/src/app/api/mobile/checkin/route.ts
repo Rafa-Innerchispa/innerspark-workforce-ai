@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     await logRef.set(normalizedEvent);
     await reservationRef.update({ status: 'completed', checkinId: logRef.id, completedAt: new Date().toISOString() });
 
-    processCheckinNovelty(principal.userId, serverTimestamp, 'MOBILE')
+    processCheckinNovelty(principal.userId, serverTimestamp, 'MOBILE', principal.tenantId)
       .catch(error => console.error('Novelty processing error:', error));
 
     return NextResponse.json({

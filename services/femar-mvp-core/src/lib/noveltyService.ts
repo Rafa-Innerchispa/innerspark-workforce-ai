@@ -1,84 +1,132 @@
 import { db } from './firebase';
 
 export type NoveltyType = 'LATE_ARRIVAL' | 'EARLY_DEPARTURE' | 'OVERTIME' | 'ON_TIME';
+export type ScheduleEvidence = 'schedule' | 'no_schedule';
+
+export interface ScheduleRecord {
+  id?: string;
+  companyId: string;
+  employeeId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
 
 export interface Novelty {
   user_id: string;
+  companyId: string;
+  tenantId: string;
   source: 'ADMS' | 'MOBILE';
   timestamp: string;
   type: NoveltyType;
-  minutes?: number;
+  minutes: number;
   created_at: string;
+  schedule_id: string | null;
+  schedule_evidence: ScheduleEvidence;
 }
 
-/**
- * Calculates novelty based on standard 09:00 - 18:00 schedule
- */
-export async function processCheckinNovelty(userId: string, timestampStr: string, source: 'ADMS' | 'MOBILE') {
-  // ADMS timestamps might look like "2026-08-04 09:15:00"
-  // Mobile timestamps might be ISO strings
-  
-  let dateObj: Date;
-  if (timestampStr.includes('T')) {
-    dateObj = new Date(timestampStr);
-  } else {
-    // Treat as Guayaquil local time (UTC-05:00)
-    dateObj = new Date(timestampStr.replace(' ', 'T') + '-05:00');
-  }
+function parseTimestamp(timestampStr: string): Date {
+  const parsed = timestampStr.includes('T')
+    ? new Date(timestampStr)
+    : new Date(timestampStr.replace(' ', 'T') + '-05:00');
+  if (Number.isNaN(parsed.getTime())) throw new Error('invalid_attendance_timestamp');
+  return parsed;
+}
 
-  // Convert to America/Guayaquil timezone
-  const formatter = new Intl.DateTimeFormat('en-US', {
+function guayaquilParts(date: Date) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Guayaquil',
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: false
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   });
-  
-  const parts = formatter.formatToParts(dateObj);
-  const hourPart = parts.find(p => p.type === 'hour')?.value || '0';
-  const minutePart = parts.find(p => p.type === 'minute')?.value || '0';
-  
-  // Handle 24h format mapping (Intl can sometimes return '24' instead of '0')
-  const rawHours = parseInt(hourPart, 10);
-  const hours = rawHours === 24 ? 0 : rawHours;
-  const minutes = parseInt(minutePart, 10);
-  
-  const timeInMinutes = hours * 60 + minutes;
-  
-  // Standard entry 09:00 (540 mins), Standard exit 18:00 (1080 mins)
-  const ENTRY_TIME = 9 * 60; 
-  const EXIT_TIME = 18 * 60;
-  
-  let type: NoveltyType = 'ON_TIME';
-  let diffMinutes = 0;
+  const parts = Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return {
+    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+    minuteOfDay: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
 
-  if (timeInMinutes < ENTRY_TIME + 120) { // Entry window (before 11:00)
-    if (timeInMinutes > ENTRY_TIME + 15) { // 15 mins grace period
-      type = 'LATE_ARRIVAL';
-      diffMinutes = timeInMinutes - ENTRY_TIME;
-    }
-  } else if (timeInMinutes >= EXIT_TIME) { // Exit window
-    if (timeInMinutes > EXIT_TIME + 30) {
-      type = 'OVERTIME';
-      diffMinutes = timeInMinutes - EXIT_TIME;
-    }
-  } else if (timeInMinutes > ENTRY_TIME + 120 && timeInMinutes < EXIT_TIME) {
-    // Early departure if it's the second punch of the day
-    type = 'EARLY_DEPARTURE';
-    diffMinutes = EXIT_TIME - timeInMinutes;
+function timeToMinutes(value: string): number {
+  const match = /^(\d{1,2}):(\d{2})/.exec(String(value || ''));
+  if (!match) throw new Error('invalid_schedule_time');
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new Error('invalid_schedule_time');
+  return hour * 60 + minute;
+}
+
+export function classifyScheduleNovelty(
+  eventMinute: number,
+  schedule: Pick<ScheduleRecord, 'startTime' | 'endTime'> | null
+): { type: NoveltyType; minutes: number; scheduleEvidence: ScheduleEvidence } {
+  if (!schedule) {
+    return { type: 'ON_TIME', minutes: 0, scheduleEvidence: 'no_schedule' };
   }
+
+  const start = timeToMinutes(schedule.startTime);
+  const end = timeToMinutes(schedule.endTime);
+  if (end <= start) throw new Error('overnight_schedule_not_supported');
+
+  if (eventMinute > end) {
+    return { type: 'OVERTIME', minutes: eventMinute - end, scheduleEvidence: 'schedule' };
+  }
+  if (eventMinute > start) {
+    return { type: 'LATE_ARRIVAL', minutes: eventMinute - start, scheduleEvidence: 'schedule' };
+  }
+  return { type: 'ON_TIME', minutes: 0, scheduleEvidence: 'schedule' };
+}
+
+async function loadSchedule(companyId: string, employeeId: string, dateKey: string): Promise<ScheduleRecord | null> {
+  const snapshot = await db.collection('schedules').where('companyId', '==', companyId).limit(500).get();
+  for (const doc of snapshot.docs) {
+    const data = doc.data() as Partial<ScheduleRecord>;
+    if (String(data.employeeId || '') === employeeId && String(data.date || '') === dateKey) {
+      if (!data.startTime || !data.endTime) return null;
+      return {
+        id: doc.id,
+        companyId,
+        employeeId,
+        date: dateKey,
+        startTime: String(data.startTime),
+        endTime: String(data.endTime),
+      };
+    }
+  }
+  return null;
+}
+
+export async function processCheckinNovelty(
+  userId: string,
+  timestampStr: string,
+  source: 'ADMS' | 'MOBILE',
+  companyId: string
+): Promise<Novelty> {
+  if (!companyId) throw new Error('company_id_required_for_novelty');
+
+  const dateObj = parseTimestamp(timestampStr);
+  const { dateKey, minuteOfDay } = guayaquilParts(dateObj);
+  const schedule = await loadSchedule(companyId, userId, dateKey);
+  const classification = classifyScheduleNovelty(minuteOfDay, schedule);
 
   const novelty: Novelty = {
     user_id: userId || 'unknown',
+    companyId,
+    tenantId: companyId,
     source,
     timestamp: dateObj.toISOString(),
-    type,
-    minutes: diffMinutes,
-    created_at: new Date().toISOString()
+    type: classification.type,
+    minutes: classification.minutes,
+    created_at: new Date().toISOString(),
+    schedule_id: schedule?.id || null,
+    schedule_evidence: classification.scheduleEvidence,
   };
 
-  const docRef = db.collection('novelties').doc();
-  await docRef.set(novelty);
-  
+  await db.collection('novelties').doc().set(novelty);
   return novelty;
 }
