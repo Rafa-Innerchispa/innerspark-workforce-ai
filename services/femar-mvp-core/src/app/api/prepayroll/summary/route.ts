@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { authErrorResponse, requireSession } from '@/lib/auth/server';
 
+type NoveltyRecord = {
+  id: string;
+  user_id?: string;
+  type?: string;
+  minutes?: number;
+};
+
 export async function GET(req: NextRequest) {
   try {
     const principal = await requireSession(req);
@@ -11,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const noveltySnapshot = await db.collection('novelties').orderBy('timestamp', 'desc').limit(2000).get();
     const novelties = noveltySnapshot.docs
-      .map(d => ({ id: d.id, ...d.data() }))
+      .map(d => ({ id: d.id, ...d.data() }) as NoveltyRecord)
       .filter(n => employeeIds.has(String(n.user_id)));
 
     const rows = employees.map(emp => {
@@ -23,9 +30,9 @@ export async function GET(req: NextRequest) {
         department: String(emp.department || 'Sin departamento'),
         baseSalary: Number(emp.baseSalary || emp.salary || 0),
         lateEvents: own.filter(n => n.type === 'LATE_ARRIVAL').length,
-        lateMinutes: own.filter(n => n.type === 'LATE_ARRIVAL').reduce((a,n) => a + Number(n.minutes || 0), 0),
-        overtimeMinutes: own.filter(n => n.type === 'OVERTIME').reduce((a,n) => a + Number(n.minutes || 0), 0),
-        earlyDepartureMinutes: own.filter(n => n.type === 'EARLY_DEPARTURE').reduce((a,n) => a + Number(n.minutes || 0), 0),
+        lateMinutes: own.filter(n => n.type === 'LATE_ARRIVAL').reduce((a, n) => a + Number(n.minutes || 0), 0),
+        overtimeMinutes: own.filter(n => n.type === 'OVERTIME').reduce((a, n) => a + Number(n.minutes || 0), 0),
+        earlyDepartureMinutes: own.filter(n => n.type === 'EARLY_DEPARTURE').reduce((a, n) => a + Number(n.minutes || 0), 0),
         sourceEvents: own.length
       };
     });

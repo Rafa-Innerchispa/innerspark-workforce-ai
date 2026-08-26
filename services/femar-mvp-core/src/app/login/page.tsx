@@ -15,7 +15,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      if (user.role === 'admin' || user.role === 'superadmin') {
+      if (user.role === 'tenant_admin' || user.role === 'master_admin') {
         router.push('/modules');
       } else {
         router.push('/mobile');

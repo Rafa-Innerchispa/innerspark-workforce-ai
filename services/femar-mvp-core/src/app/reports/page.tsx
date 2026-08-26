@@ -146,7 +146,7 @@ export default function ReportsPage() {
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metricDefinitions.map(({ key, label, icon: Icon, accent }) => {
             const result = metrics[key];
-            const value = key === "monthly_cost" ? formatMoney(result?.value) : result?.value ?? 0;
+            const value = key === "monthly_cost" ? formatMoney(result?.value) : String(result?.value ?? 0);
             return (
               <article key={key} className={`rounded-3xl border border-white/10 bg-gradient-to-br ${accent} p-5 shadow-xl backdrop-blur`}>
                 <div className="flex items-start justify-between"><div className="rounded-2xl border border-white/10 bg-black/20 p-2.5"><Icon className="h-5 w-5 text-zinc-200" /></div><span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Live</span></div>

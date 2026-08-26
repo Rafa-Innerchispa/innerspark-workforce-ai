@@ -72,7 +72,7 @@ export default function ModulesPage() {
           <div>
             <h2 className="font-semibold text-lg">{user.name}</h2>
             <p className="text-zinc-400 text-sm">
-              {user.role === 'superadmin' ? 'Super Admin' : 'Admin'} • {activeCompanyId?.toUpperCase()}
+              {user.role === 'master_admin' ? 'Master Admin' : 'Admin'} • {activeCompanyId?.toUpperCase()}
             </p>
           </div>
         </div>
@@ -125,7 +125,7 @@ export default function ModulesPage() {
           </Link>
 
           {/* Module 2: Tags Sales (Only for IA PRO or SuperAdmin) */}
-          {(activeCompanyId === 'iapro' || user.role === 'superadmin') && (
+          {(activeCompanyId === 'iapro' || user.role === 'master_admin') && (
             <Link 
               href="/tags"
               className="group relative overflow-hidden rounded-3xl p-8 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/50 transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-1"
