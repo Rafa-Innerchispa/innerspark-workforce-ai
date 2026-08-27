@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { mockEmployees } from '@/lib/mockData';
 
 type Role = 'admin' | 'employee' | null;
 
@@ -31,20 +30,30 @@ const AuthContext = createContext<AuthContextType>({
   setActiveCompanyId: () => {},
 });
 
+function persistActiveCompany(id: string | null) {
+  if (id) {
+    localStorage.setItem('femar_active_company', id);
+    document.cookie = `workforce_active_company=${encodeURIComponent(id)}; Path=/; SameSite=Lax`;
+  } else {
+    localStorage.removeItem('femar_active_company');
+    document.cookie = 'workforce_active_company=; Path=/; Max-Age=0; SameSite=Lax';
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
   const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check local storage for session on mount
     const stored = localStorage.getItem('femar_session');
     if (stored) {
       try {
         const parsedUser = JSON.parse(stored);
+        const restoredCompany = localStorage.getItem('femar_active_company') || parsedUser.companyId;
         setUser(parsedUser);
-        setActiveCompanyIdState(localStorage.getItem('femar_active_company') || parsedUser.companyId);
+        setActiveCompanyIdState(restoredCompany);
+        persistActiveCompany(restoredCompany);
       } catch (e) {
         console.error('Invalid session', e);
       }
@@ -54,8 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setActiveCompanyId = (id: string) => {
     setActiveCompanyIdState(id);
-    localStorage.setItem('femar_active_company', id);
-    // Reload page to re-fetch data based on new company
+    persistActiveCompany(id);
     window.location.reload();
   };
 
@@ -64,23 +72,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cedula, password })
+        body: JSON.stringify({ cedula, password }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
         localStorage.setItem('femar_session', JSON.stringify(data.user));
-        
-        // Handle superadmin active company (defaults to femar or their assigned company)
-        if (data.user.role === 'superadmin') {
-          setActiveCompanyIdState('femar'); // Default to first company
-          localStorage.setItem('femar_active_company', 'femar');
-        } else {
-          setActiveCompanyIdState(data.user.companyId);
-          localStorage.setItem('femar_active_company', data.user.companyId);
-        }
-        
+
+        const companyId = data.user.role === 'superadmin' ? 'femar' : data.user.companyId;
+        setActiveCompanyIdState(companyId);
+        persistActiveCompany(companyId);
         return true;
       }
       return false;
@@ -94,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setActiveCompanyIdState(null);
     localStorage.removeItem('femar_session');
-    localStorage.removeItem('femar_active_company');
+    persistActiveCompany(null);
   };
 
   return (
