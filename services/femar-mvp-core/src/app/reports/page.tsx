@@ -52,6 +52,12 @@ function ReportsContent() {
 
   const [mobileLogs, setMobileLogs] = useState<any[]>([]);
   const [loadingMobileLogs, setLoadingMobileLogs] = useState(false);
+  const [attendanceRows, setAttendanceRows] = useState<any[]>([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [attendanceMeta, setAttendanceMeta] = useState<{
+    tenant_id?: string;
+    punch_count?: number;
+  } | null>(null);
 
   React.useEffect(() => {
     // Fetch logs for ALL report types since we removed fake data generators
@@ -65,6 +71,48 @@ function ReportsContent() {
       })
       .finally(() => setLoadingMobileLogs(false));
   }, [activeCompanyId]);
+
+  React.useEffect(() => {
+    if (reportType !== "asistencia" || !activeCompanyId) {
+      return;
+    }
+
+    setLoadingAttendance(true);
+    const demoRawLog = [
+      "101\t2026-08-28 08:00:00\t0\t1",
+      "101\t2026-08-28 17:00:00\t1\t1",
+      "102\t2026-08-28 09:20:00\t0\t1",
+      "102\t2026-08-28 18:00:00\t1\t1",
+    ].join("\n");
+
+    fetch("/api/attendance/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_id: activeCompanyId,
+        device_id: "REPORTS_STUB",
+        raw_log: demoRawLog,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.attendance) {
+          setAttendanceRows(data.attendance);
+          setAttendanceMeta({
+            tenant_id: data.tenant_id,
+            punch_count: data.punch_count,
+          });
+        } else {
+          setAttendanceRows([]);
+          setAttendanceMeta(null);
+        }
+      })
+      .catch(() => {
+        setAttendanceRows([]);
+        setAttendanceMeta(null);
+      })
+      .finally(() => setLoadingAttendance(false));
+  }, [reportType, activeCompanyId]);
 
   React.useEffect(() => {
     if (searchParams?.get("download") === "pdf") {
@@ -172,6 +220,7 @@ function ReportsContent() {
               <option value="nomina">Rol de Pagos (Sueldos y Descuentos)</option>
               <option value="faltas">Reporte de Faltas (Ausentismo)</option>
               <option value="atrasos">Reporte de Atrasos (Minutos tarde)</option>
+              <option value="asistencia">Asistencia diaria (API)</option>
               <option value="consolidado">Consolidado General por Persona</option>
               <option value="mobile_checkins">Marcaciones Móviles (GPS y Fotos)</option>
             </select>
@@ -271,6 +320,12 @@ function ReportsContent() {
         title={`Vista Previa del Reporte (${getReportSubtitle()})`} 
         icon={FileBarChart}
       >
+        {reportType === "asistencia" && attendanceMeta && (
+          <p className="px-6 pt-4 text-xs text-zinc-500">
+            Tenant {attendanceMeta.tenant_id} · {attendanceMeta.punch_count ?? 0} marcaciones
+            (stub demo vía /api/attendance/report)
+          </p>
+        )}
         <div className="p-0 overflow-x-auto">
           <table className="w-full text-left text-sm text-zinc-300 whitespace-nowrap">
             <thead className="bg-zinc-800/80 text-zinc-400 border-b border-zinc-700">
@@ -319,10 +374,55 @@ function ReportsContent() {
                     <th className="px-6 py-4 font-medium">Foto (Liveness)</th>
                   </>
                 )}
+                {reportType === "asistencia" && (
+                  <>
+                    <th className="px-6 py-4 font-medium">Empleado</th>
+                    <th className="px-6 py-4 font-medium">Fecha</th>
+                    <th className="px-6 py-4 font-medium text-center">Marcaciones</th>
+                    <th className="px-6 py-4 font-medium text-center">Estado</th>
+                    <th className="px-6 py-4 font-medium text-center">Min. tarde</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
-              {reportData.length === 0 ? (
+              {reportType === "asistencia" ? (
+                loadingAttendance ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
+                      Cargando asistencia desde API...
+                    </td>
+                  </tr>
+                ) : attendanceRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
+                      Sin filas de asistencia para este tenant.
+                    </td>
+                  </tr>
+                ) : (
+                  attendanceRows.map((row: any, i: number) => (
+                    <tr key={i} className="hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-6 py-4 font-medium text-zinc-200">{row.employee_id}</td>
+                      <td className="px-6 py-4 text-zinc-400">{row.date}</td>
+                      <td className="px-6 py-4 text-center">{row.punch_count}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-2 py-1 rounded text-xs border ${
+                          row.status === "on_time"
+                            ? "bg-green-500/10 text-green-400 border-green-500/20"
+                            : row.status === "late"
+                              ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                              : "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                        }`}>
+                          {row.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center text-orange-400/90">
+                        {row.late_minutes ?? 0}
+                      </td>
+                    </tr>
+                  ))
+                )
+              ) : reportData.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">
                     No hay datos para los filtros seleccionados.

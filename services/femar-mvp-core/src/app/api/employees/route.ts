@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { tenantEmployeesCollection } from '@/tenant/tenantFirestore';
+
+function resolveTenantId(
+  ...candidates: Array<string | null | undefined>
+): string | undefined {
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,8 +21,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ID and Name are required' }, { status: 400 });
     }
 
-    // Save or update employee in Firestore
-    const empRef = db.collection('employees').doc(employeeData.id);
+    const tenantId = resolveTenantId(
+      employeeData.tenant_id,
+      employeeData.companyId
+    );
+
+    // Tenant-scoped path when id is known; legacy flat collection otherwise.
+    const empRef = tenantId
+      ? tenantEmployeesCollection(db, tenantId).doc(employeeData.id)
+      : db.collection('employees').doc(employeeData.id);
     await empRef.set({
       ...employeeData,
       updatedAt: new Date().toISOString()
@@ -52,11 +71,17 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const companyId = url.searchParams.get('companyId');
-    let query: FirebaseFirestore.Query = db.collection('employees');
-    
-    if (companyId) {
-      query = query.where('companyId', '==', companyId);
+    const tenantId = resolveTenantId(
+      url.searchParams.get('tenant_id'),
+      url.searchParams.get('companyId')
+    );
+
+    let query: FirebaseFirestore.Query = tenantId
+      ? tenantEmployeesCollection(db, tenantId)
+      : db.collection('employees');
+
+    if (!tenantId && url.searchParams.get('companyId')) {
+      query = query.where('companyId', '==', url.searchParams.get('companyId'));
     }
     
     const snapshot = await query.get();
