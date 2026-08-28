@@ -2,6 +2,13 @@ import { WorkforceEvent } from './types';
 import { ZktecoAdapter } from './adapters/zkteco';
 import { HikvisionAdapter } from './adapters/hikvision';
 
+export {
+  buildTenantAttendanceReport,
+  defaultTenantId,
+  processDeviceAttlog,
+  tenantAttendanceConfig,
+} from './attendanceRuntime';
+
 const adapters = {
   zkteco: new ZktecoAdapter(),
   hikvision: new HikvisionAdapter(),

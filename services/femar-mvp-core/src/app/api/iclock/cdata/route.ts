@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { processCheckinNovelty } from '@/lib/noveltyService';
+import { processDeviceAttlog } from '@/lib/workforce/attendanceRuntime';
 
 // Handle ZKTeco Initialization (Handshake)
 export async function GET(req: NextRequest) {
@@ -58,6 +59,13 @@ export async function POST(req: NextRequest) {
     const batch = db.batch();
 
     if (table === 'ATTLOG') {
+      let pipelineResult: ReturnType<typeof processDeviceAttlog> | null = null;
+      try {
+        pipelineResult = processDeviceAttlog(sn, rawData);
+      } catch (pipelineErr) {
+        console.error('Attendance pipeline parse error:', pipelineErr);
+      }
+
       const admsLogsRef = db.collection('adms_logs');
       for (const line of lines) {
         const parts = line.split('\t');
@@ -76,6 +84,23 @@ export async function POST(req: NextRequest) {
           // Asynchronously process the novelty
           processCheckinNovelty(parts[0], parts[1], 'ADMS').catch(e => console.error('Novelty processing error:', e));
         }
+      }
+
+      if (pipelineResult && pipelineResult.punches.length > 0) {
+        const snapshot = {
+          device_id: sn,
+          tenant_id: pipelineResult.tenant.tenant_id,
+          punch_count: pipelineResult.punches.length,
+          attendance: pipelineResult.attendance,
+          created_at: new Date().toISOString(),
+        };
+        void db
+          .collection('attendance_pipeline_runs')
+          .doc()
+          .set(snapshot)
+          .catch((err) =>
+            console.error('Attendance pipeline snapshot persist error:', err)
+          );
       }
     } else if (table === 'FINGERTMP') {
       const fingerprintRef = db.collection('fingerprints');

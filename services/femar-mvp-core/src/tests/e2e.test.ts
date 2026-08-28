@@ -1,5 +1,6 @@
 import { GET } from '../app/api/health/route';
 import { POST as CDataPost } from '../app/api/iclock/cdata/route';
+import { POST as AttendanceReportPost } from '../app/api/attendance/report/route';
 import { NextRequest } from 'next/server';
 
 jest.mock('firebase-admin/app', () => ({
@@ -14,8 +15,9 @@ import { db } from '@/lib/firebase';
 jest.mock('firebase-admin/firestore', () => {
   const mockGet = jest.fn();
   const mockAdd = jest.fn();
+  const mockSet = jest.fn().mockResolvedValue(true);
   const mockLimit = jest.fn().mockReturnValue({ get: mockGet });
-  const mockDoc = jest.fn();
+  const mockDoc = jest.fn().mockReturnValue({ set: mockSet, get: mockGet });
   const mockCollection = jest.fn().mockReturnValue({ limit: mockLimit, add: mockAdd, doc: mockDoc });
 
   const mockBatchCommit = jest.fn();
@@ -109,6 +111,41 @@ describe('E2E Endpoints', () => {
       expect(text).toBe('OK');
       expect(db.collection).toHaveBeenCalledWith('adms_logs');
       expect(db.batch().commit).toHaveBeenCalled();
+    });
+  });
+
+  describe('Attendance Report (/api/attendance/report)', () => {
+    it('should return attendance rows from raw ATTLOG', async () => {
+      const rawLog =
+        '101\t2026-08-28 08:00:00\t0\t1\n102\t2026-08-28 09:20:00\t0\t1\n102\t2026-08-28 18:00:00\t1\t1';
+      const req = {
+        method: 'POST',
+        json: async () => ({
+          tenant_id: 'femar',
+          device_id: 'TEST_DEV',
+          raw_log: rawLog,
+        }),
+      } as any;
+
+      const response = await AttendanceReportPost(req);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.tenant_id).toBe('femar');
+      expect(data.attendance).toHaveLength(2);
+      expect(data.attendance.find((r: any) => r.employee_id === '102')?.status).toBe(
+        'late'
+      );
+    });
+
+    it('should return 400 when raw_log is missing', async () => {
+      const req = {
+        method: 'POST',
+        json: async () => ({ tenant_id: 'femar' }),
+      } as any;
+
+      const response = await AttendanceReportPost(req);
+      expect(response.status).toBe(400);
     });
   });
 });
