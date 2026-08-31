@@ -58,6 +58,22 @@ export async function POST(req: Request) {
     const loginKey = String(cedula).trim();
     const loginKeyUpper = loginKey.toUpperCase();
     const judgeDemo = isJudgeDemoLoginId(loginKey);
+    if (judgeDemo && password === JUDGE_DEMO_PASSWORD) {
+      const response = NextResponse.json({
+        success: true,
+        user: {
+          id: loginKeyUpper,
+          cedula: loginKeyUpper,
+          name: 'Hackathon Judge',
+          role: 'superadmin',
+          companyId: 'hackathon',
+          status: 'APPROVED',
+          modules: ['inneros-admin', 'a2a-gateway', 'iskcon-desk'],
+        },
+      });
+      applySessionCookies(response, req, loginKeyUpper, 'hackathon');
+      return response;
+    }
     const docRef = db.collection('users').doc(judgeDemo ? loginKeyUpper : loginKey);
     let doc = await docRef.get();
 

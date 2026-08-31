@@ -8,6 +8,7 @@ const FEMAR_ROOT =
   process.env.FEMAR_ROOT ||
   '/home/rlopez/inneros/inneros_core/workspaces/innerspark-workforce-ai/services/femar-mvp-core';
 const SCRIPT = path.join(FEMAR_ROOT, 'scripts', 'mcp_tool_call.py');
+const MCP_TIMEOUT_MS = Number(process.env.RALFIA_MCP_TIMEOUT_MS || 120000);
 
 export type McpBridgeResult = Record<string, unknown> & { ok?: boolean; error?: string };
 
@@ -18,7 +19,7 @@ function runMcpTool(toolName: string, args: Record<string, unknown>): Promise<Mc
       PYTHON,
       [SCRIPT, toolName, JSON.stringify(args)],
       {
-        timeout: 25000,
+        timeout: MCP_TIMEOUT_MS,
         env: process.env,
         maxBuffer: 2 * 1024 * 1024,
       },

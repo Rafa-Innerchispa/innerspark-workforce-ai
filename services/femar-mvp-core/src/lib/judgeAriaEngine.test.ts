@@ -52,6 +52,20 @@ describe('judgeAriaEngine', () => {
     expect(reply.text).toContain('cid-empty');
   });
 
+  it('does not mark unauthorized backend text as LIVE', async () => {
+    const { runJudgeMcpAction } = jest.requireMock('@/lib/judgeConsoleApi');
+    runJudgeMcpAction.mockResolvedValueOnce({
+      ok: true,
+      correlation_id: 'cid-auth',
+      status: 'OK',
+      text: 'Unauthorized: valid X-API-Key or OAuth Bearer token required',
+    });
+    const reply = await handleJudgeAriaPrompt('hola', 'en', 'cid-auth');
+    expect(reply.ok).toBe(false);
+    expect(reply.actionStatus).toBe('NOT_READY');
+    expect(reply.text).toContain('Unauthorized');
+  });
+
   it('routes run test 1 through ask_aria per Codex contract', async () => {
     const reply = await handleJudgeAriaPrompt('run test 1', 'en');
     expect(reply.action).toBe('ask_aria');

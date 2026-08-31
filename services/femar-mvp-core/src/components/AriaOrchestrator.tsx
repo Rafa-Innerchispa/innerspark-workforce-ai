@@ -214,7 +214,7 @@ export default function AriaOrchestrator({
   }, [mode, userId, moduleId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages]);
 
   useEffect(() => {

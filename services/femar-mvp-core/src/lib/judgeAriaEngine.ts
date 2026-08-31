@@ -46,6 +46,7 @@ function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | '
   const model = (res.model_result as { model?: string } | undefined)?.model;
   const provider = (res.model_result as { provider?: string } | undefined)?.provider;
   const runtime = (res.model_result as { runtime?: string } | undefined)?.runtime;
+  const failureText = `${res.error || ''} ${answer}`.toLowerCase();
 
   let text = answer;
   if (!text && res.ok === false) {
@@ -63,9 +64,21 @@ function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | '
     text += `\n\ncorrelation …${correlation.slice(-10)}`;
   }
 
-  const ok = res.ok !== false && status !== 'FAIL' && status !== 'ERROR' && Boolean(answer);
+  const ok =
+    res.ok !== false &&
+    status !== 'FAIL' &&
+    status !== 'ERROR' &&
+    status !== 'UNAUTHORIZED' &&
+    !failureText.includes('unauthorized') &&
+    Boolean(answer);
   const actionStatus =
-    status === 'PARTIAL' || !answer ? 'PARTIAL' : ok ? 'LIVE' : status === 'NOT_READY' ? 'NOT_READY' : 'PARTIAL';
+    status === 'PARTIAL' || !answer
+      ? 'PARTIAL'
+      : ok
+        ? 'LIVE'
+        : status === 'NOT_READY' || failureText.includes('unauthorized')
+          ? 'NOT_READY'
+          : 'PARTIAL';
 
   return {
     text: text.slice(0, 2400),

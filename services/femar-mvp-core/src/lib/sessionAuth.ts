@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { ModuleId, resolveAllowedModuleIds } from '@/lib/entityEntitlements';
+import { isJudgeDemoLoginId, JUDGE_LOGIN_ACCOUNTS } from '@/lib/judgeCredentials';
 
 export type SessionUser = {
   id: string;
@@ -19,6 +20,24 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const userId = cookieStore.get('session_token')?.value;
   if (!userId) return null;
+
+  if (isJudgeDemoLoginId(userId)) {
+    const account = JUDGE_LOGIN_ACCOUNTS.find((a) => a.username === userId.toUpperCase());
+    return {
+      id: userId.toUpperCase(),
+      cedula: userId.toUpperCase(),
+      name: account?.displayName || 'Hackathon Judge',
+      role: 'superadmin',
+      companyId: 'hackathon',
+      status: 'APPROVED',
+      modules: ['inneros-admin', 'a2a-gateway', 'iskcon-desk'],
+      allowedModuleIds: resolveAllowedModuleIds('hackathon', 'superadmin', [
+        'inneros-admin',
+        'a2a-gateway',
+        'iskcon-desk',
+      ]),
+    };
+  }
 
   const doc = await db.collection('users').doc(userId).get();
   if (!doc.exists) return null;
