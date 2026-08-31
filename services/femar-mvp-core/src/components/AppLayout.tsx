@@ -14,26 +14,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isRegisterPage = pathname === '/register';
   const isModuleSelection = pathname === '/modules';
   const isTagsPage = pathname === '/tags';
-  const isFullPage = isLoginPage || isRegisterPage || isModuleSelection || isTagsPage;
+  const isJudgePage = pathname === '/app/judge';
+  const isFullPage = isLoginPage || isRegisterPage || isModuleSelection || isTagsPage || isJudgePage;
 
   useEffect(() => {
     if (!isLoading) {
-      if (!user && !isLoginPage && !isRegisterPage) {
-        // Redirect unauthenticated users to login
+      if (!user && !isLoginPage && !isRegisterPage && !isJudgePage) {
         router.push('/login');
       } else if (user && (isLoginPage || isRegisterPage)) {
-        // Redirect authenticated users away from login
         if (user.role === 'admin' || user.role === 'superadmin') {
           router.push('/modules');
         } else {
           router.push('/mobile');
         }
-      } else if (user && user.role === 'employee' && pathname !== '/mobile') {
-        // Restrict employees to mobile page
+      } else if (user && user.role === 'employee' && pathname !== '/mobile' && !isJudgePage) {
         router.push('/mobile');
       }
     }
-  }, [user, isLoading, isLoginPage, router, pathname]);
+  }, [user, isLoading, isLoginPage, isRegisterPage, isJudgePage, router, pathname]);
 
   if (isLoading) {
     return (
@@ -43,12 +41,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If we are on full pages, don't show sidebar
   if (isFullPage) {
     return <>{children}</>;
   }
 
-  // If not logged in, but not on login (waiting for redirect), show nothing to prevent flashes
   if (!user) {
     return null;
   }
