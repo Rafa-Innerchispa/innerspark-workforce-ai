@@ -271,7 +271,7 @@ export default function JudgeConsolePage() {
   const kpis = snapshot?.kpis || { total: 0, verified: 0, passRate: 0, local: 0, cloud: 0 };
 
   const tracePanel = (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-[min(480px,52dvh)] min-h-0 flex-col overflow-hidden">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500">
         <span>LIVE trace only: persisted MCP/A2A/RACB events</span>
         {traceStale ? <span className="text-amber-300">showing last good trace while reconnecting</span> : null}
