@@ -50,6 +50,10 @@ describe('judgeVisualAudit', () => {
       { task_class: 'bounded_function_intent', selected_model: 'functiongemma', runtime: 'local_classifier' },
     ];
     expect(modelOptionReadiness('local_amd', routes)).toBe('LIVE');
+    expect(modelOptionReadiness('functiongemma', routes)).toBe('LIVE');
+    const prev = process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_ID;
+    process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_ID = '';
     expect(modelOptionReadiness('functiongemma', routes)).toBe('NOT_READY');
+    process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_ID = prev;
   });
 });

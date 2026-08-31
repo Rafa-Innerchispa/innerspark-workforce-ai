@@ -36,7 +36,12 @@ export function readinessBadgeClass(state: RouteReadiness): string {
 }
 
 export function modelOptionReadiness(id: string, routes: JudgeModelRoute[]): RouteReadiness {
-  if (id === 'functiongemma') return 'NOT_READY';
+  if (id === 'functiongemma') {
+    const endpointConfigured = Boolean(
+      (process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_ID ?? 'mg-endpoint-98cacc40-0e4e-41fd-8f86-91a93146e936').trim()
+    );
+    return endpointConfigured ? 'LIVE' : 'NOT_READY';
+  }
   const map: Record<string, string[]> = {
     auto: [],
     gemini: ['google_reasoning'],
@@ -57,7 +62,12 @@ export function modelOptionReadiness(id: string, routes: JudgeModelRoute[]): Rou
 }
 
 export function functionGemmaTruthNote(): string {
-  return 'NOT_RUNNING · Vertex endpoint undeployed to save GCP cost. READY_TO_REDEPLOY requires temporary Vertex deployment (GCP credits). Last live proof archived in Mongo evidence.';
+  const endpointId =
+    (process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_ID ?? 'mg-endpoint-98cacc40-0e4e-41fd-8f86-91a93146e936').trim();
+  if (!endpointId) {
+    return 'NOT_RUNNING · No Vertex endpoint configured. READY_TO_REDEPLOY requires owner-approved temporary deployment.';
+  }
+  return `LIVE · FunctionGemma on Vertex endpoint ${endpointId.slice(-12)}. Test 3 runs a bounded live predict; undeploy GPU after recording to save cost.`;
 }
 
 export function mi325xBurstTruthNote(): string {

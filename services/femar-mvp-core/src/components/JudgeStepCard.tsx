@@ -88,9 +88,11 @@ export default function JudgeStepCard({
           type="button"
           disabled={disabled}
           onClick={onRun}
+          data-testid={`judge-run-test-${idx + 1}`}
+          aria-label={runLabel(idx, Boolean(isActive))}
           className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-[11px] text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
         >
-          <Play className="h-3 w-3" />
+          <Play className="h-3 w-3" aria-hidden />
           {runLabel(idx, Boolean(isActive))}
         </button>
       </div>

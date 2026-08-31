@@ -4,7 +4,7 @@ import { mergeTraceEvents } from '@/lib/judgeGlobalTrace';
 import { loadA2aProofBundle } from '@/lib/judgeA2aProofServer';
 import { requireJudgeConsoleAccess } from '@/lib/sessionAuth';
 
-const SOFT_OK_ACTIONS = new Set(['demo_recording_suite']);
+const SOFT_OK_ACTIONS = new Set(['demo_recording_suite', 'gemma_probe']);
 
 export async function GET(req: NextRequest) {
   const user = await requireJudgeConsoleAccess();

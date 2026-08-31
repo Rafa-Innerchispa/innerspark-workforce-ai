@@ -459,7 +459,7 @@ export default function JudgeConsolePage() {
         )}
 
         {/* Guided 7-step process */}
-        <section>
+        <section data-testid="judge-seven-proofs" data-judge-ready="true" aria-busy={loading || demoRunning}>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Seven Judge Proofs</h2>

@@ -1,24 +1,32 @@
+import { execFile } from 'node:child_process';
+
 import { runFunctionGemmaProbe } from '@/lib/functionGemmaProbe';
 
-jest.mock('google-auth-library', () => ({
-  GoogleAuth: jest.fn().mockImplementation(() => ({
-    getClient: jest.fn().mockResolvedValue({
-      getAccessToken: jest.fn().mockResolvedValue({ token: 'test-token' }),
-    }),
-  })),
+jest.mock('node:child_process', () => ({
+  execFile: jest.fn(),
 }));
 
 describe('functionGemmaProbe', () => {
-  const originalFetch = global.fetch;
+  const mockedExecFile = execFile as unknown as jest.Mock;
 
-  afterEach(() => {
-    global.fetch = originalFetch;
+  beforeEach(() => {
+    mockedExecFile.mockReset();
   });
 
-  it('returns LIVE PASS when endpoint responds', async () => {
-    global.fetch = jest.fn(async () =>
-      new Response('{"predictions":[{"content":"{\\"intent\\":\\"call_tool\\"}"}]}', { status: 200 })
-    ) as typeof fetch;
+  it('returns LIVE PASS when python probe succeeds', async () => {
+    mockedExecFile.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(
+        null,
+        JSON.stringify({
+          ok: true,
+          live_mode: 'LIVE',
+          latency_ms: 120,
+          response_preview: '{"predictions":[{"content":"call_tool"}]}',
+          endpoint_id: 'mg-endpoint-test',
+        }),
+        ''
+      );
+    });
 
     const result = await runFunctionGemmaProbe('corr-live-test', { routes: [] });
     expect(result.ok).toBe(true);
@@ -34,5 +42,6 @@ describe('functionGemmaProbe', () => {
     process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_ID = prev;
     expect(result.live_mode).toBe('NOT_READY');
     expect(String(result.status)).toContain('HISTORICAL');
+    expect(mockedExecFile).not.toHaveBeenCalled();
   });
 });
