@@ -9,6 +9,10 @@ import {
   mergeTraceEvents,
   type TraceFilterId,
 } from '@/lib/judgeGlobalTrace';
+import {
+  loadJudgeTraceContractEvents,
+  runWithJudgeTraceContract,
+} from '@/lib/judgeTraceContract';
 
 export type JudgeTraceEvent = {
   correlation_id?: string;
@@ -116,12 +120,13 @@ export async function loadGlobalTraceEvents(options: LoadGlobalTraceOptions = {}
   const historyArgs: Record<string, unknown> = { limit };
   if (options.correlationId) historyArgs.correlation_id = options.correlationId;
 
-  const [currentRes, historyRes, activityRes] = await Promise.all([
+  const [currentRes, historyRes, activityRes, contractTrace] = await Promise.all([
     callMcpTool('judge_trace_current', { limit }),
     callMcpTool('judge_trace_history', historyArgs),
     options.includeActivity !== false
       ? callMcpTool('list_recent_agent_activity', { hours: 6, limit: 80 })
       : Promise.resolve({ ok: true, items: [] } as McpBridgeResult),
+    loadJudgeTraceContractEvents({ correlationId: options.correlationId, limit }),
   ]);
 
   const judgeEvents = mergeTraceEvents(
@@ -132,14 +137,21 @@ export async function loadGlobalTraceEvents(options: LoadGlobalTraceOptions = {}
 
   const activityEvents = extractActivityItems(activityRes).map(agentActivityToTrace);
   if (activityEvents.length) sources.push('agent_activity_mongo');
+  if (contractTrace.events.length) sources.push(contractTrace.source);
 
   if (currentRes.ok === false && currentRes.error) errors.push(String(currentRes.error));
   if (activityRes.ok === false && activityRes.error && !String(activityRes.error).includes('Method not found')) {
     errors.push(String(activityRes.error));
   }
+  if (contractTrace.error) errors.push(contractTrace.error);
+
+  const mergedEvents = mergeTraceEvents(judgeEvents, activityEvents, contractTrace.events);
+  const scopedEvents = options.correlationId
+    ? mergedEvents.filter((event) => event.correlation_id === options.correlationId)
+    : mergedEvents;
 
   return {
-    events: mergeTraceEvents(judgeEvents, activityEvents),
+    events: scopedEvents,
     sources,
     errors,
   };
@@ -212,6 +224,13 @@ export async function loadJudgeConsoleSnapshot(options: LoadGlobalTraceOptions =
 }
 
 export async function runJudgeMcpAction(
+  action: string,
+  payload: Record<string, unknown> = {}
+): Promise<McpBridgeResult> {
+  return runWithJudgeTraceContract(action, payload, () => executeJudgeMcpAction(action, payload));
+}
+
+async function executeJudgeMcpAction(
   action: string,
   payload: Record<string, unknown> = {}
 ): Promise<McpBridgeResult> {
