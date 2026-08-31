@@ -9,10 +9,16 @@ describe('judgeRecordingSuite', () => {
 
   it('marks suite PASS when all steps succeed', async () => {
     const runner = jest.fn(async (action: string): Promise<McpBridgeResult> => {
+      if (action === 'safe_trigger') return { ok: true, status: 'PASS', message: 'healthy' };
       if (action === 'a2a_handshake') return { ok: true, status: { state: 'online' }, agent_count: 58 };
-      if (action === 'a2a_cards') return { ok: true, cards: [{ id: 'AG-25' }] };
-      if (action === 'iskcon_emergency_pdf') return { ok: true, pdf_url: '/api/artifacts/x.pdf' };
-      return { ok: true, workflow_id: 'wf-demo' };
+      if (action === 'gemma_probe')
+        return { ok: true, model: 'FunctionGemma', status: 'HISTORICAL_PROVEN_CURRENTLY_NOT_RUNNING' };
+      if (action === 'gemini_emergency_pdf')
+        return { ok: true, pdf_url: '/api/ecosystem/judge/artifact?id=judge-gemini-pdf-test', model: 'gemini-2.5-flash' };
+      if (action === 'local_ai_proof')
+        return { ok: true, answer: 'Local AMD ok', model: 'Qwen3-Coder', runtime: 'vLLM', node: '192.168.1.5' };
+      if (action === 'a2a_dispatch') return { ok: true, dry_run: true, task_id: 'dry-1' };
+      return { ok: true, workflow_id: 'wf-demo', answer: 'workflow ok' };
     });
 
     const result = await runJudgeRecordingSuite(runner, 'es');

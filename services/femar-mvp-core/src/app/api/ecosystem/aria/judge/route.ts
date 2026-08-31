@@ -48,5 +48,7 @@ export async function POST(req: Request) {
     correlation_id: reply.correlation_id,
     action: reply.action ? { id: reply.action, status: reply.actionStatus || (reply.ok ? 'LIVE' : 'NOT_READY') } : undefined,
     ok: reply.ok,
+    provenance: reply.provenance,
+    artifacts: reply.artifacts,
   });
 }

@@ -1,4 +1,5 @@
 import { JUDGE_DEMO_STEPS, type JudgeDemoStep } from '@/lib/judgeDemoSteps';
+import { buildStepProof, formatProofBlock, type JudgeStepProof } from '@/lib/judgeStepProof';
 import type { McpBridgeResult } from '@/lib/ralfiaMcpBridge';
 
 export type JudgeDemoStepResult = {
@@ -6,6 +7,7 @@ export type JudgeDemoStepResult = {
   label: string;
   ok: boolean;
   detail?: string;
+  proof?: JudgeStepProof;
 };
 
 function stepOk(action: string, res: McpBridgeResult): { ok: boolean; detail: string } {
@@ -28,18 +30,55 @@ function stepOk(action: string, res: McpBridgeResult): { ok: boolean; detail: st
   if (action === 'gemma_probe') {
     const status = String(res.status || res.state || res.route_state || res.gemma_route_state || 'not_running');
     const model = String(res.model || res.selected_model || res.model_id || 'FunctionGemma');
-    const truthful = /gemma/i.test(model) || /function/i.test(model) || /not_ready|not_running|ready_to_redeploy/i.test(status);
+    const truthful = /gemma/i.test(model) || /function/i.test(model) || /historical|not_running|ready_to_redeploy/i.test(status);
     return {
       ok: truthful,
-      detail: `${model.slice(0, 54)} status=${status.slice(0, 40)}`,
+      detail: `${model.slice(0, 54)} · ${status.slice(0, 48)} · HISTORICAL EVIDENCE`,
+    };
+  }
+  if (action === 'gemini_emergency_pdf') {
+    const url = String(res.pdf_url || (res.artifacts as { url?: string }[] | undefined)?.[0]?.url || '');
+    const partial = res.gemini_fallback === true || res.status === 'PARTIAL';
+    return {
+      ok: Boolean(url),
+      detail: url
+        ? `pdf=${url.slice(-56)} model=${String(res.model || '?')} ${partial ? 'PARTIAL fallback' : 'LIVE Gemini'}`
+        : 'no_pdf_artifact',
     };
   }
   if (action === 'iskcon_emergency_pdf') {
     const url = String(res.pdf_url || (res.artifacts as { url?: string }[] | undefined)?.[0]?.url || '');
     return { ok: Boolean(url), detail: url ? `pdf=${url.slice(-48)}` : 'no_pdf_artifact' };
   }
+  if (action === 'local_ai_proof') {
+    const answer = String(res.answer || res.text || res.response || res.output || '');
+    return {
+      ok: Boolean(answer),
+      detail: answer
+        ? `${String(res.model || 'local').slice(0, 32)} @ ${String(res.runtime || res.node || 'AMD')} · ${answer.slice(0, 100)}`
+        : 'routing_only_no_model_output',
+    };
+  }
   if (action === 'a2a_dispatch') {
-    return { ok: true, detail: String(res.task_id || res.dry_run || 'dispatched').slice(0, 80) };
+    const dryRun = res.dry_run !== false;
+    return {
+      ok: true,
+      detail: dryRun
+        ? `DRY-RUN · ${String(res.task_id || res.dry_run || 'accepted')}`
+        : String(res.task_id || res.dry_run || 'dispatched').slice(0, 80),
+    };
+  }
+  if (action === 'workflow_start') {
+    const answer = String(res.answer || res.text || res.message || '');
+    const workflowId = String(res.workflow_id || res.id || '');
+    return {
+      ok: Boolean(answer) || Boolean(workflowId),
+      detail: answer
+        ? answer.slice(0, 120)
+        : workflowId
+          ? `workflow_started:${workflowId.slice(0, 40)}`
+          : String(res.correlation_id || 'ok').slice(0, 80),
+    };
   }
   return { ok: true, detail: String(res.workflow_id || res.correlation_id || 'ok').slice(0, 80) };
 }
@@ -63,15 +102,18 @@ export function evaluateJudgeDemoStep(
   action: string,
   res: McpBridgeResult,
   lang: 'es' | 'en' = 'en',
-  step: JudgeDemoStep
+  step: JudgeDemoStep,
+  traceEvents: import('@/lib/judgeConsoleApi').JudgeTraceEvent[] = []
 ): JudgeDemoStepResult {
   const verdict = stepOk(action, res);
   const stepIndex = JUDGE_DEMO_STEPS.indexOf(step);
+  const proof = buildStepProof(action, res, step, traceEvents);
   return {
     id: step.id,
     label: step.labelEn,
     ok: verdict.ok,
-    detail: formatJudgeStepVerdict(step, stepIndex >= 0 ? stepIndex : 0, verdict, lang),
+    proof,
+    detail: formatProofBlock(proof),
   };
 }
 

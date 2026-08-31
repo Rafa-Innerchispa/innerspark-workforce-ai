@@ -74,8 +74,11 @@ export function humanEventLabel(event: JudgeTraceEvent, meta?: { testNumber?: nu
   if (action.includes('gemma')) {
     return 'Reading FunctionGemma historical evidence';
   }
+  if (action.includes('gemini') || action.includes('gemini_emergency')) {
+    return 'Generating Gemini emergency PDF artifact';
+  }
   if (action.includes('iskcon')) {
-    return 'Generating ISKCON emergency PDF artifact';
+    return 'Generating emergency PDF artifact';
   }
   if (action.includes('workflow')) {
     return 'Starting judge workflow through ARIA orchestrator';

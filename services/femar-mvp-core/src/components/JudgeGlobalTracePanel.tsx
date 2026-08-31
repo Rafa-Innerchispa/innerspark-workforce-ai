@@ -67,6 +67,38 @@ function TimelineEvent({ event, meta }: { event: JudgeTraceEvent; meta: TraceRun
           {event.status || 'EVENT'}
         </span>
       </div>
+      <div className="mt-2 grid gap-1 text-[10px] text-zinc-400 sm:grid-cols-2">
+        {event.source && event.target ? (
+          <div>
+            <span className="text-zinc-600">Connection · </span>
+            {event.source} → {event.target}
+          </div>
+        ) : null}
+        {event.provider || event.model ? (
+          <div>
+            <span className="text-zinc-600">Provider · </span>
+            {[event.provider, event.model].filter(Boolean).join(' · ')}
+          </div>
+        ) : null}
+        {event.runtime || event.node ? (
+          <div>
+            <span className="text-zinc-600">Runtime · </span>
+            {[event.runtime, event.node].filter(Boolean).join(' · ')}
+          </div>
+        ) : null}
+        {event.latency_ms != null ? (
+          <div>
+            <span className="text-zinc-600">Latency · </span>
+            {event.latency_ms} ms
+          </div>
+        ) : null}
+        {event.evidence_ref || event.artifact_id ? (
+          <div className="sm:col-span-2">
+            <span className="text-zinc-600">Evidence · </span>
+            {event.evidence_ref || event.artifact_id}
+          </div>
+        ) : null}
+      </div>
       {fields.length ? (
         <button
           type="button"

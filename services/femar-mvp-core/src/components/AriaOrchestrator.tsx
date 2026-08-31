@@ -10,6 +10,11 @@ import {
 } from '@/lib/ariaChatStorage';
 import { innerosCopy, type InnerOSLang } from '@/lib/innerosCopy';
 import { isSimpleGreeting, naturalGreetingText, newJudgeGreetingCorrelationId } from '@/lib/judgeAriaGreeting';
+import {
+  JUDGE_ARIA_STEP_COMMANDS,
+  judgeAriaOpeningMessage,
+  judgeProvenanceLabel,
+} from '@/lib/judgeAriaIntro';
 
 type Artifact = { name: string; mime: string; url: string };
 
@@ -35,6 +40,8 @@ type Msg = {
   navigate?: { url: string; module_id: string };
   artifacts?: Artifact[];
   actionStatus?: string;
+  provenance?: string;
+  correlationId?: string;
 };
 
 type SessionSummary = {
@@ -67,9 +74,7 @@ function welcomeMessage(lang: InnerOSLang, moduleId?: string): string {
       : 'I am ARIA on ISKCON Desk. Ask for: sponsors, emergency plan, letter, dossier, WhatsApp, or Food for Life.';
   }
   if (moduleId === 'judge') {
-    return lang === 'es'
-      ? 'ARIA · Judge Mode. Escribe "help", "run test 1" o "run all seven tests" — acciones reales en MCP.'
-      : 'ARIA · Judge Mode. Type "help", "run test 1", or "run all seven tests" — live MCP actions.';
+    return judgeAriaOpeningMessage(lang);
   }
   return copy.welcome;
 }
@@ -307,11 +312,11 @@ export default function AriaOrchestrator({
     setListening(true);
   };
 
-  const send = async (e?: React.FormEvent) => {
+  const send = async (e?: React.FormEvent, overrideText?: string) => {
     e?.preventDefault();
-    const text = input.trim();
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
-    setInput('');
+    if (!overrideText) setInput('');
     if (moduleId === 'judge' && isSimpleGreeting(text)) {
         const userMsg: Msg = {
           id: Date.now().toString(),
@@ -319,7 +324,7 @@ export default function AriaOrchestrator({
           text: attachmentName ? `${text}\n[${attachmentName}]` : text,
         };
         const correlationId = newJudgeGreetingCorrelationId();
-        const reply = naturalGreetingText(lang);
+        const reply = judgeAriaOpeningMessage(lang);
         setMessages((m) => [
           ...m,
           userMsg,
@@ -328,6 +333,7 @@ export default function AriaOrchestrator({
             role: 'aria',
             text: reply,
             actionStatus: 'LIVE',
+            provenance: 'LOCAL COMMAND',
           },
         ]);
         onJudgeEvent?.({ correlationId, action: 'greeting', ok: true });
@@ -398,6 +404,12 @@ export default function AriaOrchestrator({
         navigate: data.navigate,
         artifacts: data.artifacts,
         actionStatus: data.action?.status,
+        provenance:
+          data.provenance ||
+          (moduleId === 'judge'
+            ? judgeProvenanceLabel(typeof data.action === 'object' ? data.action?.id : data.action)
+            : undefined),
+        correlationId: data.correlation_id,
       };
       setMessages((m) => [...m.filter((msg) => msg.id !== runningMsgId), ariaMsg]);
       speak(reply);
@@ -667,11 +679,47 @@ export default function AriaOrchestrator({
                   <Download className="h-3 w-3" /> {a.name}
                 </a>
               ))}
+              {m.role === 'aria' && m.provenance ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-700/60 pt-2 text-[9px] text-zinc-500">
+                  <span className="rounded bg-zinc-900/80 px-1.5 py-0.5 font-bold uppercase tracking-wide text-zinc-300">
+                    {m.provenance}
+                  </span>
+                  {m.correlationId ? <span className="font-mono">{m.correlationId.slice(0, 42)}</span> : null}
+                </div>
+              ) : null}
             </div>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {moduleId === 'judge' ? (
+        <div className="shrink-0 border-t border-zinc-800 bg-zinc-950/80 px-2 py-2">
+          <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
+            {lang === 'es' ? '7 pruebas guiadas' : '7 guided proofs'}
+          </p>
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {JUDGE_ARIA_STEP_COMMANDS.map((item) => (
+              <button
+                key={item.step}
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  void send(undefined, item.command);
+                }}
+                className="shrink-0 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[10px] font-medium text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
+              >
+                {item.step}. {item.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[9px] text-zinc-600">
+            {lang === 'es'
+              ? 'Pregunta lo que quieras para verificar respuesta en vivo.'
+              : 'Ask anything to verify a live response.'}
+          </p>
+        </div>
+      ) : null}
 
       <form onSubmit={send} className="flex shrink-0 gap-1.5 border-t border-zinc-800 bg-zinc-950/90 p-2">
         <input

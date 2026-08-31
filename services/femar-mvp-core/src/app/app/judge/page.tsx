@@ -21,9 +21,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import AriaOrchestrator from '@/components/AriaOrchestrator';
 import JudgeShell from '@/components/JudgeShell';
 import JudgeGlobalTracePanel from '@/components/JudgeGlobalTracePanel';
+import JudgeProofCard from '@/components/JudgeProofCard';
 import type { JudgeContentSection, JudgeModelRoute, JudgeTraceEvent } from '@/lib/judgeConsoleApi';
 import { JUDGE_CLOUD_BURST_NOTE, JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
 import { evaluateJudgeDemoStep } from '@/lib/judgeDemoEval';
+import type { JudgeStepProof } from '@/lib/judgeStepProof';
+import { extractThisRunUsed } from '@/lib/judgeStepProof';
 import {
   inferRouteReadiness,
   modelOptionReadiness,
@@ -68,6 +71,7 @@ type StepRunState = {
   id: string;
   ok?: boolean;
   detail?: string;
+  proof?: JudgeStepProof;
   running?: boolean;
   correlationId?: string;
 };
@@ -230,11 +234,19 @@ export default function JudgeConsolePage() {
       }))
     );
     const data = await runAction(step.action, { ...(step.payload || {}), correlation_id }, step.id);
-    const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step);
+    const traceForEval = (data.trace_events as JudgeTraceEvent[] | undefined) || lastTraceRef.current;
+    const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step, traceForEval);
     setStepStates((prev) =>
       prev.map((s) =>
         s.id === step.id
-          ? { id: step.id, ok: verdict.ok, detail: verdict.detail, running: false, correlationId: correlation_id }
+          ? {
+              id: step.id,
+              ok: verdict.ok,
+              detail: verdict.detail,
+              proof: verdict.proof,
+              running: false,
+              correlationId: correlation_id,
+            }
           : { ...s, running: false }
       )
     );
@@ -257,8 +269,14 @@ export default function JudgeConsolePage() {
           { ...(step.payload || {}), correlation_id },
           step.id
         );
-        const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step);
-        collected.push({ id: step.id, ok: verdict.ok, detail: verdict.detail, correlationId: correlation_id });
+        const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step, (data.trace_events as JudgeTraceEvent[] | undefined) || []);
+        collected.push({
+          id: step.id,
+          ok: verdict.ok,
+          detail: verdict.detail,
+          proof: verdict.proof,
+          correlationId: correlation_id,
+        });
         setStepStates([...collected]);
       }
       const pass = collected.filter((s) => s.ok).length;
@@ -317,6 +335,10 @@ export default function JudgeConsolePage() {
     ? 'MCP judge backend is reporting pending_merge; refresh or check the live MCP service.'
     : '';
   const kpis = snapshot?.kpis || { total: 0, verified: 0, passRate: 0, local: 0, cloud: 0 };
+  const thisRunUsed = useMemo(
+    () => extractThisRunUsed(displayEvents, activeCorrelationId),
+    [displayEvents, activeCorrelationId]
+  );
   const resourceCards = MODEL_OPTIONS.map((option) => {
     const route = routeForOption(option.id, routes);
     return {
@@ -479,7 +501,7 @@ export default function JudgeConsolePage() {
                       className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-[11px] text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
                     >
                       <Play className="h-3 w-3" />
-                      {isActive ? 'Running...' : `Run test ${idx + 1}`}
+                      {idx === 2 ? 'Verify evidence' : idx === 3 ? 'Generate PDF' : isActive ? 'Running...' : `Run test ${idx + 1}`}
                     </button>
                   </summary>
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-3 text-xs text-zinc-400">
@@ -501,11 +523,7 @@ export default function JudgeConsolePage() {
                     <p className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-100">
                       <span className="font-semibold">PASS criteria:</span> {step.passCriteria}
                     </p>
-                    {state?.detail ? (
-                      <div className="mt-2 rounded-lg border border-zinc-700 bg-zinc-950/80 p-3 text-[11px] leading-5 text-zinc-200 whitespace-pre-wrap">
-                        {state.detail}
-                      </div>
-                    ) : null}
+                    {state?.proof ? <JudgeProofCard proof={state.proof} /> : null}
                     {state?.correlationId ? (
                       <p className="mt-2 break-all rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 font-mono text-[10px] text-violet-200">
                         correlation_id: {state.correlationId}
@@ -524,9 +542,22 @@ export default function JudgeConsolePage() {
               <div>
                 <div className="flex items-center gap-2 font-semibold text-zinc-100">
                   <Network className="h-4 w-4 text-emerald-300" />
-                  Resource Fabric · Live Routing
+                  Routing Map · Live Policy Snapshot
                 </div>
-                <p className="mt-1 text-[11px] text-zinc-500">This selector explains policy. Execution happens through probes and the seven proofs.</p>
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Current routing policy from judge_model_routing_policy — not necessarily what the active test run used.
+                </p>
+                {thisRunUsed ? (
+                  <div className="mt-2 rounded-lg border border-blue-500/25 bg-blue-500/10 p-2 text-[10px] text-blue-100">
+                    <span className="font-bold">THIS RUN USED:</span>{' '}
+                    {[thisRunUsed.action, thisRunUsed.provider, thisRunUsed.model, thisRunUsed.runtime, thisRunUsed.node]
+                      .filter(Boolean)
+                      .join(' · ') || 'pending trace'}
+                    {thisRunUsed.correlationId ? (
+                      <span className="mt-1 block font-mono text-[9px] opacity-80">{thisRunUsed.correlationId}</span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <ReadinessPill state={modelOptionReadiness(selectedModel, routes)} />
             </div>
@@ -649,8 +680,10 @@ export default function JudgeConsolePage() {
         {routes.length > 0 && (
           <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/70">
             <div className="border-b border-zinc-800 px-4 py-3">
-              <div className="text-sm font-semibold text-white">Where InnerOS Runs Work</div>
-              <div className="text-[10px] text-zinc-500">Resource Fabric · honest routing status for judges</div>
+              <div className="text-sm font-semibold text-white">Routing Map · Live Policy Snapshot</div>
+              <div className="text-[10px] text-zinc-500">
+                Policy/capability table from judge_model_routing_policy · refreshed with snapshot load
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left text-xs">

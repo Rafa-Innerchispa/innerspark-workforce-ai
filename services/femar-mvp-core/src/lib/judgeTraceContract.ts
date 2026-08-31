@@ -40,7 +40,7 @@ function targetForAction(action: string): string {
   if (action.includes('a2a')) return 'InnerOS A2A / AG-25';
   if (action.includes('gemma')) return 'Google Vertex FunctionGemma evidence';
   if (action.includes('mi325x')) return 'DigitalOcean AMD MI325X evidence';
-  if (action.includes('iskcon')) return 'ISKCON artifact pipeline';
+  if (action.includes('gemini')) return 'Google Gemini → PDF artifact';
   if (action.includes('workflow')) return 'Judge workflow runtime';
   if (action.includes('safe_trigger')) return 'Ralphi MCP safe trigger';
   return 'InnerOS runtime';

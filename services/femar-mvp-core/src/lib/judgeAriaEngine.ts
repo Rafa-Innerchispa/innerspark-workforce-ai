@@ -1,4 +1,10 @@
-import { isSimpleGreeting, naturalGreetingText } from '@/lib/judgeAriaGreeting';
+import { isSimpleGreeting } from '@/lib/judgeAriaGreeting';
+import {
+  judgeAriaOpeningMessage,
+  judgeAriaStepCompletionMessage,
+  judgeProvenanceLabel,
+} from '@/lib/judgeAriaIntro';
+import { buildStepProof } from '@/lib/judgeStepProof';
 import { JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
 import { evaluateJudgeDemoStep } from '@/lib/judgeDemoEval';
 import { runJudgeMcpAction } from '@/lib/judgeConsoleApi';
@@ -11,6 +17,8 @@ export type JudgeAriaReply = {
   action?: string;
   ok?: boolean;
   actionStatus?: string;
+  provenance?: string;
+  artifacts?: { name: string; mime: string; url: string }[];
 };
 
 function newCorrelationId(): string {
@@ -131,6 +139,7 @@ function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | '
     action: 'ask_aria',
     ok,
     actionStatus,
+    provenance: judgeProvenanceLabel('ask_aria'),
   };
 }
 
@@ -213,24 +222,31 @@ export async function handleJudgeAriaPrompt(
     const stepCid = `${cid}-${step.id}`;
     const res = await runJudgeMcpAction(step.action, { ...(step.payload || {}), correlation_id: stepCid });
     const verdict = evaluateJudgeDemoStep(step.action, res, lang, step);
+    const proof = verdict.proof || buildStepProof(step.action, res, step);
+    const artifacts = proof.pdfUrl
+      ? [{ name: proof.pdfFilename || 'judge-emergency-plan.pdf', mime: 'application/pdf', url: proof.pdfUrl }]
+      : undefined;
     return {
-      text: `${verdict.ok ? 'PASS' : 'PARTIAL'} · Test ${stepIndex + 1}: ${step.labelEn}\n${verdict.detail || '—'}\ncorrelation_id: ${String(res.correlation_id || stepCid)}`,
+      text: judgeAriaStepCompletionMessage(stepIndex, verdict.ok, proof.summary, lang),
       source: 'judge_aria',
       correlation_id: String(res.correlation_id || stepCid),
       action: step.action,
       ok: verdict.ok,
       actionStatus: verdict.ok ? 'LIVE' : 'PARTIAL',
+      provenance: judgeProvenanceLabel(step.action),
+      artifacts,
     };
   }
 
   if (isSimpleGreeting(lower)) {
     return {
-      text: naturalGreetingText(lang),
+      text: judgeAriaOpeningMessage(lang),
       source: 'judge_aria',
       correlation_id: cid,
       action: 'greeting',
       ok: true,
       actionStatus: 'LIVE',
+      provenance: judgeProvenanceLabel('greeting'),
     };
   }
 

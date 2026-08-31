@@ -253,7 +253,7 @@ async function executeJudgeMcpAction(
         action: String(payload.trigger || 'verify_system'),
         prompt: String(payload.prompt || ''),
         correlation_id: String(payload.correlation_id || ''),
-        dry_run: payload.dry_run !== false,
+        dry_run: payload.dry_run === true,
       });
     case 'mi325x_preflight':
       return callMcpTool('judge_mi325x_deploy', { action: 'preflight', params: { dry_run: true, ...(payload.params as object) } });
@@ -274,6 +274,23 @@ async function executeJudgeMcpAction(
       });
     case 'iskcon_emergency_pdf':
       return runIskconEmergencyPdfDemo();
+    case 'gemini_emergency_pdf': {
+      const { runGeminiEmergencyPdfProof } = await import('@/lib/judgeGeminiEmergencyPdf');
+      return runGeminiEmergencyPdfProof(String(payload.correlation_id || `judge-gemini-${Date.now()}`));
+    }
+    case 'local_ai_proof': {
+      const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const message = String(
+        payload.message ||
+          `Return one sentence confirming local-first routing on AMD. Nonce: ${nonce}`
+      );
+      return callMcpTool('route_ai_task', {
+        message,
+        task_class: 'coding',
+        correlation_id: String(payload.correlation_id || ''),
+        prefer_local: true,
+      });
+    }
     case 'gemma_probe':
       {
         const routing = await callMcpTool('judge_model_routing_policy', {});

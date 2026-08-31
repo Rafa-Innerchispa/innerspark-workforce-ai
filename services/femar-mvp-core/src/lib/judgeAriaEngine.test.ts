@@ -73,8 +73,8 @@ describe('judgeAriaEngine', () => {
     const reply = await handleJudgeAriaPrompt('hola', 'es', 'cid-hola');
     expect(reply.action).toBe('greeting');
     expect(reply.actionStatus).toBe('LIVE');
-    expect(reply.text).toContain('¡Hola!');
-    expect(reply.text).not.toContain('MCP');
+    expect(reply.text).toContain('ARIA');
+    expect(reply.text).toContain('7');
     expect(reply.text).not.toContain('PASS simulado');
     expect(runJudgeMcpAction.mock.calls.length).toBe(before);
   });
@@ -83,6 +83,7 @@ describe('judgeAriaEngine', () => {
     const reply = await handleJudgeAriaPrompt('holña', 'es', 'cid-typo');
     expect(reply.action).toBe('greeting');
     expect(reply.text).toContain('ARIA');
+    expect(reply.provenance).toBe('LOCAL COMMAND');
   });
 
   it('turns an empty successful backend response into a truthful PARTIAL message', async () => {
@@ -146,7 +147,8 @@ describe('judgeAriaEngine', () => {
   it('runs guided test N via real MCP step action', async () => {
     const reply = await handleJudgeAriaPrompt('run test 1', 'en');
     expect(reply.action).toBe('safe_trigger');
-    expect(reply.text).toContain('Test 1');
+    expect(reply.text).toContain('Step 1');
+    expect(reply.provenance).toBe('LIVE MCP');
     expect(reply.correlation_id).toBeTruthy();
   });
 
