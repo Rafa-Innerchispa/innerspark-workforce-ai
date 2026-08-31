@@ -28,12 +28,22 @@ function stepOk(action: string, res: McpBridgeResult): { ok: boolean; detail: st
     return { ok: n > 0, detail: `cards=${n}` };
   }
   if (action === 'gemma_probe') {
+    const liveMode = String(res.live_mode || '');
     const status = String(res.status || res.state || res.route_state || res.gemma_route_state || 'not_running');
     const model = String(res.model || res.selected_model || res.model_id || 'FunctionGemma');
-    const truthful = /gemma/i.test(model) || /function/i.test(model) || /historical|not_running|ready_to_redeploy/i.test(status);
+    if (liveMode === 'LIVE' && res.ok !== false) {
+      return {
+        ok: true,
+        detail: `LIVE · endpoint=${String(res.endpoint_id || '?').slice(-12)} · ${String(res.latency_ms ?? '?')}ms · ${String(res.response_preview || '').slice(0, 72)}`,
+      };
+    }
+    const truthful =
+      /gemma/i.test(model) ||
+      /function/i.test(model) ||
+      /historical|not_running|ready_to_redeploy/i.test(status);
     return {
       ok: truthful,
-      detail: `${model.slice(0, 54)} · ${status.slice(0, 48)} · HISTORICAL EVIDENCE`,
+      detail: `${model.slice(0, 54)} · ${status.slice(0, 48)} · ${liveMode || 'HISTORICAL'}`,
     };
   }
   if (action === 'gemini_emergency_pdf') {

@@ -331,31 +331,23 @@ async function executeJudgeMcpAction(
         status: answer ? 'PASS' : 'PARTIAL',
       };
     }
-    case 'gemma_probe':
-      {
-        const routing = await callMcpTool('judge_model_routing_policy', {});
-        const routes = Array.isArray(routing.routes) ? routing.routes as JudgeModelRoute[] : [];
-        const gemmaRoute = routes.find((route) =>
-          /gemma|bounded_function_intent/i.test(
-            `${route.task_class || ''} ${route.selected_model || ''} ${route.runtime || ''} ${route.reason || ''}`
-          )
-        );
-        return {
-          ok: true,
-          correlation_id: String(payload.correlation_id || ''),
-          status: 'HISTORICAL_PROVEN_CURRENTLY_NOT_RUNNING_READY_TO_REDEPLOY',
-          provider: 'Google Vertex AI',
-          model: 'FunctionGemma',
-          runtime: 'vertex-model-garden-evidence',
-          selected_model: gemmaRoute?.selected_model || 'functiongemma historical evidence',
-          route_readiness: 'NOT_READY',
-          evidence_ref: 'resource_fabric:google-ai-platform + judge_model_routing_policy:bounded_function_intent',
-          message:
-            'FunctionGemma is presented as verified hackathon evidence and ready-to-redeploy, not as a live serving endpoint.',
-          routing,
-          resource_fabric_status: 'registered_google_ai_platform; detailed telemetry shown in Resource Fabric panel',
-        };
-      }
+    case 'gemma_probe': {
+      const routing = await callMcpTool('judge_model_routing_policy', {});
+      const correlationId = String(payload.correlation_id || `judge-gemma-${Date.now()}`);
+      const { runFunctionGemmaProbe } = await import('@/lib/functionGemmaProbe');
+      const probe = await runFunctionGemmaProbe(correlationId, routing as Record<string, unknown>);
+      const routes = Array.isArray(routing.routes) ? (routing.routes as JudgeModelRoute[]) : [];
+      const gemmaRoute = routes.find((route) =>
+        /gemma|bounded_function_intent/i.test(
+          `${route.task_class || ''} ${route.selected_model || ''} ${route.runtime || ''} ${route.reason || ''}`
+        )
+      );
+      return {
+        ...probe,
+        correlation_id: correlationId,
+        selected_model: gemmaRoute?.selected_model || 'publishers/google/models/functiongemma',
+      };
+    }
     case 'external_ping':
       return callMcpTool('a2a_dispatch', {
         agent_id: String(payload.agent_id || 'AG-25'),

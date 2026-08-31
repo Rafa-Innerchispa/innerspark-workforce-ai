@@ -4,7 +4,6 @@ import { ChevronRight, Play } from 'lucide-react';
 import JudgeProofCard from '@/components/JudgeProofCard';
 import type { JudgeDemoStep } from '@/lib/judgeDemoSteps';
 import type { JudgeStepProof } from '@/lib/judgeStepProof';
-import { readinessBadgeClass, type RouteReadiness } from '@/lib/judgeVisualAudit';
 
 export type JudgeStepRunState = {
   id: string;
@@ -14,14 +13,35 @@ export type JudgeStepRunState = {
   correlationId?: string;
 };
 
-function StepStatusPill({ state }: { state: 'READY' | 'RUNNING' | RouteReadiness }) {
-  const classes =
-    state === 'READY'
-      ? 'border-zinc-700 bg-zinc-800/70 text-zinc-300'
-      : state === 'RUNNING'
-        ? 'border-blue-500/40 bg-blue-500/15 text-blue-200'
-        : readinessBadgeClass(state);
-  return <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${classes}`}>{state}</span>;
+type TerminalBadge = 'PASS' | 'PARTIAL' | 'FAIL' | 'READY' | 'RUNNING';
+
+function resolveTerminalBadge(state?: JudgeStepRunState): TerminalBadge {
+  if (state?.running) return 'RUNNING';
+  if (state?.proof?.status) return state.proof.status;
+  return 'READY';
+}
+
+function terminalBadgeClass(badge: TerminalBadge): string {
+  switch (badge) {
+    case 'PASS':
+      return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200';
+    case 'PARTIAL':
+      return 'border-amber-500/40 bg-amber-500/15 text-amber-100';
+    case 'FAIL':
+      return 'border-red-500/40 bg-red-500/15 text-red-200';
+    case 'RUNNING':
+      return 'border-blue-500/40 bg-blue-500/15 text-blue-200';
+    default:
+      return 'border-zinc-700 bg-zinc-800/70 text-zinc-300';
+  }
+}
+
+function TerminalStatusPill({ badge }: { badge: TerminalBadge }) {
+  return (
+    <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${terminalBadgeClass(badge)}`}>
+      {badge}
+    </span>
+  );
 }
 
 function runLabel(idx: number, running: boolean) {
@@ -63,15 +83,7 @@ export default function JudgeStepCard({
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-zinc-400">{step.purpose}</p>
         </div>
-        {state?.running ? (
-          <StepStatusPill state="RUNNING" />
-        ) : state?.ok === true ? (
-          <StepStatusPill state="LIVE" />
-        ) : state?.ok === false ? (
-          <StepStatusPill state="NOT_READY" />
-        ) : (
-          <StepStatusPill state="READY" />
-        )}
+        <TerminalStatusPill badge={resolveTerminalBadge(state)} />
         <button
           type="button"
           disabled={disabled}

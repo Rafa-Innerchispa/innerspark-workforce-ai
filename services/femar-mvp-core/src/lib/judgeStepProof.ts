@@ -113,22 +113,44 @@ export function buildStepProof(
   }
 
   if (action === 'gemma_probe') {
+    const liveMode = String(res.live_mode || '');
     const status = String(res.status || 'HISTORICAL_VERIFIED');
     const model = String(res.model || res.selected_model || 'FunctionGemma');
-    const ok = /gemma|function/i.test(model);
+    const isLive = liveMode === 'LIVE' && res.ok !== false;
+    const isHistorical = /not_running|ready_to_redeploy|historical/i.test(status);
+    const ok = isLive || /gemma|function/i.test(model);
     return {
-      headline: 'FunctionGemma — historical evidence verification',
-      status: statusFromOk(ok, /not_running|ready_to_redeploy/i.test(status)),
-      summary: 'Hackathon evidence preserved. Endpoint is NOT live — no fake inference spinner.',
+      headline: isLive
+        ? 'FunctionGemma — live Vertex inference'
+        : 'FunctionGemma — historical evidence verification',
+      status: isLive ? 'PASS' : statusFromOk(ok, isHistorical),
+      whatHappened: isLive
+        ? 'Vertex Model Garden endpoint returned a live prediction (prompt/generate format).'
+        : isHistorical
+          ? 'Hackathon evidence verified; endpoint not serving live inference.'
+          : 'FunctionGemma probe completed with partial or failed live path.',
+      summary: isLive
+        ? `Live response preview · ${latencyMs != null ? `${latencyMs} ms` : 'latency n/a'}`
+        : 'Hackathon evidence preserved. Live inference only when endpoint is deployed.',
+      whereToLook: 'Proof block + endpoint id below + Global Live Trace.',
       lines: [
         `Model identity: ${model}`,
-        `Current state: ${status}`,
-        `Evidence: ${String(res.evidence_ref || 'judge_model_routing_policy + resource_fabric')}`,
-        'Live inference: NOT RUNNING (truthful)',
-      ],
+        `Live mode: ${liveMode || (isHistorical ? 'NOT_READY' : status)}`,
+        res.endpoint_id ? `Endpoint: ${String(res.endpoint_id)}` : '',
+        res.deployed_model_id ? `Deployed model: ${String(res.deployed_model_id)}` : '',
+        res.response_preview ? `Response preview: ${String(res.response_preview).slice(0, 180)}` : '',
+        res.nonce ? `Nonce: ${String(res.nonce)}` : '',
+        !isLive
+          ? `Evidence: ${String(res.evidence_ref || 'judge_model_routing_policy + resource_fabric')}`
+          : '',
+        res.error ? `Error: ${String(res.error).slice(0, 160)}` : '',
+        latencyMs != null ? `Latency: ${latencyMs} ms` : '',
+        correlationId ? `Correlation: ${correlationId}` : '',
+      ].filter(Boolean),
       provider: String(res.provider || 'Google Vertex AI'),
       model,
-      runtime: String(res.runtime || 'vertex-model-garden-evidence'),
+      runtime: String(res.runtime || (isLive ? 'vertex-model-garden-endpoint' : 'vertex-model-garden-evidence')),
+      latencyMs,
       correlationId,
       eventCount: scopedTrace.length,
       timestamp,
