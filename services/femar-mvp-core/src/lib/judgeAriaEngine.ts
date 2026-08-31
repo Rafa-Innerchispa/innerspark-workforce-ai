@@ -187,6 +187,7 @@ export async function handleJudgeAriaPrompt(
       action: 'help_catalog',
       ok: true,
       actionStatus: 'LIVE',
+      provenance: judgeProvenanceLabel('help_catalog'),
     };
   }
 
@@ -201,6 +202,7 @@ export async function handleJudgeAriaPrompt(
       action: 'trace_help',
       ok: true,
       actionStatus: 'LIVE',
+      provenance: judgeProvenanceLabel('trace_help'),
     };
   }
 
@@ -213,6 +215,7 @@ export async function handleJudgeAriaPrompt(
       action: 'explain_test',
       ok: true,
       actionStatus: 'LIVE',
+      provenance: judgeProvenanceLabel('explain_test'),
     };
   }
 
