@@ -207,6 +207,19 @@ export default function JudgeConsolePage() {
     const correlation_id = freshStepCorrelation(step.id);
     setActiveCorrelationId(correlation_id);
     setTraceFilter('current_run');
+    const optimisticStart: JudgeTraceEvent = {
+      correlation_id,
+      event_type: 'judge_test_start',
+      status: 'RUNNING',
+      ts_start_ms: Date.now(),
+      source: 'Judge Console',
+      target: step.agent,
+      protocol: step.protocol,
+      action: step.action,
+      tool: step.action,
+    };
+    lastTraceRef.current = mergeTraceEvents(lastTraceRef.current, [optimisticStart]);
+    setTraceEvents(lastTraceRef.current);
     setStepStates(
       JUDGE_DEMO_STEPS.map((s) => ({
         id: s.id,
@@ -633,7 +646,10 @@ export default function JudgeConsolePage() {
         {/* Model routing table */}
         {routes.length > 0 && (
           <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/70">
-            <div className="border-b border-zinc-800 px-4 py-3 text-sm font-semibold text-white">Model routing (MCP truth table)</div>
+            <div className="border-b border-zinc-800 px-4 py-3">
+              <div className="text-sm font-semibold text-white">Where InnerOS Runs Work</div>
+              <div className="text-[10px] text-zinc-500">Resource Fabric · honest routing status for judges</div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left text-xs">
                 <thead className="bg-zinc-900/80 text-[10px] uppercase text-zinc-500">
@@ -655,7 +671,7 @@ export default function JudgeConsolePage() {
                       </td>
                       <td className="px-3 py-2">{r.selected_model}</td>
                       <td className="px-3 py-2">{r.runtime}</td>
-                      <td className="px-3 py-2">{r.provider_id || '—'}</td>
+                      <td className="px-3 py-2">{r.provider_id || 'Not used in this view'}</td>
                       <td className="px-3 py-2 text-zinc-500">{String(r.reason || '').slice(0, 80)}</td>
                     </tr>
                   ))}

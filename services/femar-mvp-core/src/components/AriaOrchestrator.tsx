@@ -9,6 +9,7 @@ import {
   sessionTitleFromMessages,
 } from '@/lib/ariaChatStorage';
 import { innerosCopy, type InnerOSLang } from '@/lib/innerosCopy';
+import { isSimpleGreeting, naturalGreetingText, newJudgeGreetingCorrelationId } from '@/lib/judgeAriaGreeting';
 
 type Artifact = { name: string; mime: string; url: string };
 
@@ -311,6 +312,29 @@ export default function AriaOrchestrator({
     const text = input.trim();
     if (!text || loading) return;
     setInput('');
+    if (moduleId === 'judge' && isSimpleGreeting(text)) {
+        const userMsg: Msg = {
+          id: Date.now().toString(),
+          role: 'user',
+          text: attachmentName ? `${text}\n[${attachmentName}]` : text,
+        };
+        const correlationId = newJudgeGreetingCorrelationId();
+        const reply = naturalGreetingText(lang);
+        setMessages((m) => [
+          ...m,
+          userMsg,
+          {
+            id: `${Date.now()}-greeting`,
+            role: 'aria',
+            text: reply,
+            actionStatus: 'LIVE',
+          },
+        ]);
+        onJudgeEvent?.({ correlationId, action: 'greeting', ok: true });
+        setAttachmentName(null);
+        setPendingFile(null);
+        return;
+      }
     const userMsg: Msg = {
       id: Date.now().toString(),
       role: 'user',

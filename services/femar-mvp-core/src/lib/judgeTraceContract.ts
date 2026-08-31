@@ -17,7 +17,7 @@ export type JudgeTraceContractWrite = {
 function tracePath(): string {
   return (
     process.env.JUDGE_TRACE_CONTRACT_PATH ||
-    path.join(os.tmpdir(), 'inneros_judge_trace_contract_events.jsonl')
+    '/home/rlopez/data/judge/inneros_judge_trace_contract_events.jsonl'
   );
 }
 

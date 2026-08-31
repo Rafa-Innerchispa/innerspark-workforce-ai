@@ -1,3 +1,4 @@
+import { isSimpleGreeting, naturalGreetingText } from '@/lib/judgeAriaGreeting';
 import { JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
 import { evaluateJudgeDemoStep } from '@/lib/judgeDemoEval';
 import { runJudgeMcpAction } from '@/lib/judgeConsoleApi';
@@ -44,10 +45,6 @@ function wantsHelp(lower: string): boolean {
   return /\b(what can you do|help|commands|comandos|qu[eé] puedes hacer)\b/.test(lower);
 }
 
-function isSimpleGreeting(lower: string): boolean {
-  return /^(hi|hello|hola|hol+a|hol[ñn]a|ola|hey|buenas|buenos|buen d[ií]a)[\s,!?.]*$/i.test(lower);
-}
-
 function parseRunTestIndex(lower: string): number | null {
   const m =
     lower.match(/\b(?:run|ejecuta|opcion|option|test)\s*(?:#|n[oº.]?\s*)?(\d)\b/) ||
@@ -73,12 +70,6 @@ function safeBackendUnavailableText(lang: 'es' | 'en', correlation: string): str
   return lang === 'es'
     ? `Estoy aquí contigo. En este momento una conexión interna no respondió bien, así que no voy a mostrarte detalles técnicos. Puedes seguir conversando o ejecutar una prueba del Judge; dejé la referencia ${correlation} para revisar la traza.`
     : `I am here with you. An internal connection did not respond cleanly right now, so I will not expose technical details in the chat. You can keep talking or run a Judge test; I kept reference ${correlation} for the trace.`;
-}
-
-function naturalGreetingText(lang: 'es' | 'en'): string {
-  return lang === 'es'
-    ? '¡Hola! Soy ARIA. Estoy lista para conversar contigo, ayudarte a entender el demo o ejecutar una de las 7 pruebas del Judge cuando me lo pidas.'
-    : 'Hi! I am ARIA. I am ready to talk naturally, help you understand the demo, or run one of the 7 Judge tests when you ask.';
 }
 
 function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | 'en'): JudgeAriaReply {
