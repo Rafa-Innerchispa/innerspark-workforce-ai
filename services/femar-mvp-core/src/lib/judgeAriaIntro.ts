@@ -10,9 +10,9 @@ export const JUDGE_ARIA_STEP_COMMANDS = JUDGE_DEMO_STEPS.map((step, index) => ({
 export function judgeAriaOpeningMessage(lang: 'es' | 'en'): string {
   const steps = JUDGE_ARIA_STEP_COMMANDS.map((item) => `${item.step}. ${item.label}`).join('\n');
   if (lang === 'es') {
-    return `Soy ARIA, tu guía en el Judge Workspace.\n\nTe acompaño en 7 pruebas en vivo sobre MCP real. Ejecútalas en orden o pídeme cualquier paso.\n\n${steps}\n\nComandos: "run test 1" … "run test 7" · "run all seven tests" · pregúntame lo que quieras para verificar respuesta en vivo.`;
+    return `Soy ARIA, tu guía en el Judge Workspace.\n\nAquí hay 7 pruebas en vivo. Puedes ejecutarlas de dos maneras: pedírmelas aquí (por ejemplo, "run test 2") o usar los botones de las 7 pruebas que aparecen debajo. Ambos caminos ejecutan la misma acción real.\n\nCuando una prueba corre, verás mi respuesta aquí, el bloque "Proof produced" en su tarjeta y la evidencia de ejecución al lado en Global Live Trace.\n\n${steps}\n\nPuedes empezar con cualquier prueba del 1 al 7, ejecutar todas en orden o hacerme una pregunta libre para verificar una respuesta en vivo.`;
   }
-  return `I am ARIA, your guide in the Judge Workspace.\n\nI'll guide you through 7 live proofs on real MCP. Run them in order or ask me to run any step.\n\n${steps}\n\nCommands: "run test 1" … "run test 7" · "run all seven tests" · ask me anything to verify a live response.`;
+  return `I am ARIA, your guide in the Judge Workspace.\n\nThere are 7 live tests. You can run them in two ways: ask me here (for example, "run test 2") or use the seven test buttons below. Both paths execute the same real action.\n\nWhen a test runs, you will see my response here, a "Proof produced" block on its card, and the execution evidence beside me in Global Live Trace.\n\n${steps}\n\nStart with any test from 1 to 7, run them in order, or ask me a free-form question to verify a live response.`;
 }
 
 export function judgeAriaStepCompletionMessage(
