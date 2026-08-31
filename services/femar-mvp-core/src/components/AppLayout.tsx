@@ -33,6 +33,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, isLoading, isLoginPage, isRegisterPage, isJudgePage, router, pathname]);
 
+  // Judge is a deliberately public, read-only demo surface. Render it immediately
+  // without waiting for Workforce session restoration or showing the auth spinner.
+  if (isJudgePage) {
+    return <>{children}</>;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
