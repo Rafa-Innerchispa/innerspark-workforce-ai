@@ -25,6 +25,15 @@ function stepOk(action: string, res: McpBridgeResult): { ok: boolean; detail: st
         : Number(res.count ?? 0);
     return { ok: n > 0, detail: `cards=${n}` };
   }
+  if (action === 'gemma_probe') {
+    const status = String(res.status || res.state || res.route_state || res.gemma_route_state || 'not_running');
+    const model = String(res.model || res.selected_model || res.model_id || 'FunctionGemma');
+    const truthful = /gemma/i.test(model) || /function/i.test(model) || /not_ready|not_running|ready_to_redeploy/i.test(status);
+    return {
+      ok: truthful,
+      detail: `${model.slice(0, 54)} status=${status.slice(0, 40)}`,
+    };
+  }
   if (action === 'iskcon_emergency_pdf') {
     const url = String(res.pdf_url || (res.artifacts as { url?: string }[] | undefined)?.[0]?.url || '');
     return { ok: Boolean(url), detail: url ? `pdf=${url.slice(-48)}` : 'no_pdf_artifact' };

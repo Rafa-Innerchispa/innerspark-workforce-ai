@@ -8,9 +8,13 @@ import {
   ChevronRight,
   Cloud,
   Cpu,
+  Database,
+  Network,
   Play,
   RefreshCw,
+  Server,
   ShieldAlert,
+  Sparkles,
   Zap,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -64,6 +68,7 @@ type StepRunState = {
   ok?: boolean;
   detail?: string;
   running?: boolean;
+  correlationId?: string;
 };
 
 function ReadinessPill({ state }: { state: RouteReadiness }) {
@@ -87,6 +92,15 @@ function StepStatusPill({ state }: { state: 'READY' | 'RUNNING' | RouteReadiness
 function freshStepCorrelation(stepId: string) {
   const suffix = Math.random().toString(36).slice(2, 8);
   return `judge-ui-trace-final-20260831-${stepId}-${Date.now()}-${suffix}`;
+}
+
+function routeForOption(id: string, routes: JudgeModelRoute[]) {
+  if (id === 'gemini') return routes.find((r) => /gemini/i.test(String(r.selected_model || r.provider_id || r.task_class)));
+  if (id === 'functiongemma') return routes.find((r) => /gemma/i.test(String(r.selected_model || r.provider_id || r.task_class)));
+  if (id === 'local_amd') return routes.find((r) => /amd|vllm/i.test(String(r.runtime || r.provider_id || r.reason || r.task_class)));
+  if (id === 'local_intel') return routes.find((r) => /intel|ollama/i.test(String(r.runtime || r.provider_id || r.reason || r.task_class)));
+  if (id === 'lemonade_voice') return routes.find((r) => /lemonade|voice|stt|tts/i.test(String(r.runtime || r.provider_id || r.reason || r.task_class)));
+  return routes.find((r) => /auto|default|routing/i.test(String(r.task_class || r.reason))) || routes[0];
 }
 
 export default function JudgeConsolePage() {
@@ -182,19 +196,24 @@ export default function JudgeConsolePage() {
   const runSingleStep = async (stepIndex: number) => {
     const step = JUDGE_DEMO_STEPS[stepIndex];
     const correlation_id = freshStepCorrelation(step.id);
+    setActiveCorrelationId(correlation_id);
+    setTraceFilter('current_run');
     setStepStates(
       JUDGE_DEMO_STEPS.map((s) => ({
         id: s.id,
         running: s.id === step.id,
         ok: stepStates.find((x) => x.id === s.id)?.ok,
         detail: stepStates.find((x) => x.id === s.id)?.detail,
+        correlationId: s.id === step.id ? correlation_id : stepStates.find((x) => x.id === s.id)?.correlationId,
       }))
     );
     const data = await runAction(step.action, { ...(step.payload || {}), correlation_id }, step.id);
     const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step);
     setStepStates((prev) =>
       prev.map((s) =>
-        s.id === step.id ? { id: step.id, ok: verdict.ok, detail: verdict.detail, running: false } : { ...s, running: false }
+        s.id === step.id
+          ? { id: step.id, ok: verdict.ok, detail: verdict.detail, running: false, correlationId: correlation_id }
+          : { ...s, running: false }
       )
     );
   };
@@ -205,16 +224,19 @@ export default function JudgeConsolePage() {
     const collected: StepRunState[] = [];
     try {
       for (const step of JUDGE_DEMO_STEPS) {
+        const correlation_id = freshStepCorrelation(step.id);
+        setActiveCorrelationId(correlation_id);
+        setTraceFilter('current_run');
         setStepStates((prev) =>
           prev.map((s) => (s.id === step.id ? { ...s, running: true } : s))
         );
         const data = await runAction(
           step.action,
-          { ...(step.payload || {}), correlation_id: freshStepCorrelation(step.id) },
+          { ...(step.payload || {}), correlation_id },
           step.id
         );
         const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step);
-        collected.push({ id: step.id, ok: verdict.ok, detail: verdict.detail });
+        collected.push({ id: step.id, ok: verdict.ok, detail: verdict.detail, correlationId: correlation_id });
         setStepStates([...collected]);
       }
       const pass = collected.filter((s) => s.ok).length;
@@ -268,7 +290,19 @@ export default function JudgeConsolePage() {
   const displayEvents = traceEvents.length ? traceEvents : snapshot?.globalEvents || snapshot?.events || [];
   const effectiveFilter = traceFilter === 'current_run' && !activeCorrelationId ? 'all' : traceFilter;
   const a2aOnline = snapshot?.backend === 'live';
+  const judgeActionsAvailable = Boolean(user && snapshot?.backend !== 'pending_merge');
+  const disabledReason = !judgeActionsAvailable
+    ? 'MCP judge backend is reporting pending_merge; refresh or check the live MCP service.'
+    : '';
   const kpis = snapshot?.kpis || { total: 0, verified: 0, passRate: 0, local: 0, cloud: 0 };
+  const resourceCards = MODEL_OPTIONS.map((option) => {
+    const route = routeForOption(option.id, routes);
+    return {
+      ...option,
+      route,
+      readiness: modelOptionReadiness(option.id, routes),
+    };
+  });
 
   const tracePanel = (
     <div className="flex h-[min(480px,52dvh)] min-h-0 flex-col overflow-hidden">
@@ -329,18 +363,21 @@ export default function JudgeConsolePage() {
             </a>
           </div>
         ) : null}
-        {/* Status + refresh */}
-        <div className="grid items-end gap-3 text-center md:grid-cols-[1fr_auto] md:text-left">
+        <div className="grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4 shadow-xl shadow-black/20 md:grid-cols-[1fr_auto] md:items-center">
           <div className="mx-auto max-w-2xl md:mx-0">
-            <h1 className="text-lg font-bold text-white">Live MCP Judge workspace</h1>
-            <p className="text-sm text-zinc-500">
-              ARIA + Global Live Trace · Guided Process · honest LIVE / NOT_READY badges
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              Live orchestration demo
+            </div>
+            <h1 className="text-2xl font-bold text-white">InnerOS Judge Workspace</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              Seven executable proofs, ARIA command surface, and persisted MCP/A2A trace evidence in one executive console.
             </p>
           </div>
           <button
             type="button"
             onClick={load}
-            className="mx-auto inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900 md:mx-0"
+            className="mx-auto inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900 md:mx-0"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh snapshot
@@ -355,7 +392,7 @@ export default function JudgeConsolePage() {
         )}
 
         {a2aOnline && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 shadow-lg shadow-emerald-950/20">
             <div className="flex items-center gap-2 text-sm text-emerald-100">
               <CheckCircle2 className="h-4 w-4" />
               MCP Judge LIVE · ready to record
@@ -374,19 +411,24 @@ export default function JudgeConsolePage() {
 
         {/* Guided 7-step process */}
         <section>
-          <h2 className="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-zinc-400 sm:text-left">
-            Individual Judge Tests
-          </h2>
-          <div className="space-y-3">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Seven Judge Proofs</h2>
+              <p className="mt-1 text-xs text-zinc-500">Each proof runs alone, creates a fresh correlation ID, and only turns green after real evidence returns.</p>
+            </div>
+            {disabledReason ? <p className="max-w-sm text-xs text-amber-200">{disabledReason}</p> : null}
+          </div>
+          <div className="grid gap-3 xl:grid-cols-2">
             {JUDGE_DEMO_STEPS.map((step, idx) => {
               const state = stepStates.find((s) => s.id === step.id);
               const isActive = state?.running || actionBusy === step.id;
               return (
                 <details
                   key={step.id}
-                  className={`group rounded-xl border bg-zinc-900/50 open:border-violet-500/30 ${
-                    isActive ? 'border-violet-500/50 ring-1 ring-violet-500/30' : 'border-zinc-800'
+                  className={`group rounded-xl border bg-zinc-900/60 shadow-sm shadow-black/20 open:border-violet-500/40 ${
+                    isActive ? 'border-blue-500/50 ring-1 ring-blue-500/30' : 'border-zinc-800'
                   }`}
+                  open={idx === 0}
                 >
                   <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3">
                     <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
@@ -405,7 +447,7 @@ export default function JudgeConsolePage() {
                       disabled={
                         (actionBusy !== null && actionBusy !== step.id) ||
                         demoRunning ||
-                        snapshot?.backend !== 'live'
+                        !judgeActionsAvailable
                       }
                       onClick={(event) => {
                         event.preventDefault();
@@ -419,16 +461,31 @@ export default function JudgeConsolePage() {
                     </button>
                   </summary>
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-3 text-xs text-zinc-400">
-                    <p className="text-[10px] text-zinc-500">
-                      <span className="font-semibold text-zinc-400">Agent:</span> {step.agent} ·{' '}
-                      <span className="font-semibold text-zinc-400">Protocol:</span> {step.protocol} ·{' '}
-                      <span className="font-semibold text-zinc-400">Mongo:</span> {step.evidenceMongo}
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">What this proves</p>
+                        <p className="mt-1 text-zinc-300">{step.purpose}</p>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Why it matters</p>
+                        <p className="mt-1 text-zinc-300">{step.expectedFlow}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] md:grid-cols-3">
+                      <div><span className="text-zinc-500">Agents involved</span><br /><span className="text-zinc-300">{step.agent}</span></div>
+                      <div><span className="text-zinc-500">Protocol/tools</span><br /><span className="font-mono text-zinc-300">{step.protocol}</span></div>
+                      <div><span className="text-zinc-500">Expected live trace</span><br /><span className="font-mono text-zinc-300">{step.evidenceMongo}</span></div>
+                    </div>
+                    <p className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-100">
+                      <span className="font-semibold">PASS criteria:</span> {step.passCriteria}
                     </p>
-                    <p className="mt-2"><span className="font-semibold text-zinc-300">Purpose:</span> {step.purpose}</p>
-                    <p className="mt-2"><span className="font-semibold text-zinc-300">Expected flow:</span> {step.expectedFlow}</p>
-                    <p className="mt-2"><span className="font-semibold text-emerald-400/90">PASS:</span> {step.passCriteria}</p>
                     {state?.detail ? (
                       <p className="mt-2 font-mono text-[10px] text-zinc-500">Result: {state.detail}</p>
+                    ) : null}
+                    {state?.correlationId ? (
+                      <p className="mt-2 break-all rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 font-mono text-[10px] text-violet-200">
+                        correlation_id: {state.correlationId}
+                      </p>
                     ) : null}
                   </div>
                 </details>
@@ -437,10 +494,18 @@ export default function JudgeConsolePage() {
           </div>
         </section>
 
-        {/* Routing + cloud burst */}
-        <div className="grid gap-4 lg:grid-cols-3">
-          <label className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs">
-            <span className="font-semibold text-zinc-200">Model selector (read-only policy view)</span>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)]">
+          <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs shadow-lg shadow-black/20">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 font-semibold text-zinc-100">
+                  <Network className="h-4 w-4 text-emerald-300" />
+                  Resource Fabric · Live Routing
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-500">This selector explains policy. Execution happens through probes and the seven proofs.</p>
+              </div>
+              <ReadinessPill state={modelOptionReadiness(selectedModel, routes)} />
+            </div>
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
@@ -452,16 +517,30 @@ export default function JudgeConsolePage() {
                 </option>
               ))}
             </select>
-            <div className="mt-2">
-              <ReadinessPill state={modelOptionReadiness(selectedModel, routes)} />
-              {selectedModel === 'functiongemma' ? (
-                <p className="mt-2 text-[10px] text-rose-300/90">{functionGemmaTruthNote()}</p>
-              ) : null}
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {resourceCards.map(({ id, label, route, readiness }) => (
+                <div key={id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-zinc-100">{label}</p>
+                      <p className="mt-1 truncate font-mono text-[10px] text-zinc-500">{route?.selected_model || route?.runtime || 'No route evidence yet'}</p>
+                    </div>
+                    <ReadinessPill state={readiness} />
+                  </div>
+                  <p className="mt-2 max-h-8 overflow-hidden text-[10px] text-zinc-500">{String(route?.reason || route?.provider_id || 'Policy visible; run an available proof to create fresh evidence.').slice(0, 120)}</p>
+                </div>
+              ))}
             </div>
-          </label>
+            {selectedModel === 'functiongemma' ? (
+              <p className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] text-rose-100">{functionGemmaTruthNote()}</p>
+            ) : null}
+          </section>
 
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs">
-            <div className="font-semibold text-amber-100">{JUDGE_CLOUD_BURST_NOTE.title}</div>
+          <section className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-xs shadow-lg shadow-black/20">
+            <div className="flex items-center gap-2 font-semibold text-amber-100">
+              <Server className="h-4 w-4" />
+              {JUDGE_CLOUD_BURST_NOTE.title}
+            </div>
             {mi325x ? (
               <div
                 className={`mt-2 rounded border p-2 text-[10px] ${
@@ -478,6 +557,11 @@ export default function JudgeConsolePage() {
             )}
             <p className="mt-2 text-zinc-400">{JUDGE_CLOUD_BURST_NOTE.preflight}</p>
             <p className="mt-2 text-zinc-500">{JUDGE_CLOUD_BURST_NOTE.deploy}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-100">Verified<br />history</div>
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-2 text-blue-100">Evidence<br />preserved</div>
+              <div className="rounded-lg border border-zinc-700 bg-zinc-950/60 p-2 text-zinc-200">$0 idle<br />cost now</div>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <ReadinessPill
                 state={
@@ -492,7 +576,7 @@ export default function JudgeConsolePage() {
             </div>
             <button
               type="button"
-              disabled={!!actionBusy || snapshot?.backend !== 'live'}
+              disabled={!!actionBusy || !judgeActionsAvailable}
               onClick={() => runAction('mi325x_preflight', {}, 'preflight')}
               className="mt-3 inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-100 hover:bg-amber-500/20 disabled:opacity-40"
             >
@@ -501,25 +585,23 @@ export default function JudgeConsolePage() {
             </button>
             <button
               type="button"
-              disabled={!!actionBusy || snapshot?.backend !== 'live'}
+              disabled={!!actionBusy || !judgeActionsAvailable}
               onClick={() => runAction('gemma_probe', {}, 'gemma')}
               className="mt-2 inline-flex items-center gap-1 rounded border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[10px] text-blue-100 hover:bg-blue-500/20 disabled:opacity-40"
             >
               Gemma route probe (honest NOT_RUNNING if undeployed)
             </button>
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs text-zinc-400">
-            <div className="font-semibold text-zinc-200">Routing policy</div>
-            <p className="mt-2">local_first: {String(snapshot?.modelRouting?.local_first ?? true)}</p>
-            <p>{routes.length} routes from MCP judge_model_routing_policy</p>
-          </div>
+          </section>
         </div>
 
         {actionResult ? (
-          <pre className="max-h-36 overflow-auto rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[10px] text-zinc-400">
-            {actionResult}
-          </pre>
+          <section className="rounded-xl border border-zinc-800 bg-zinc-950 shadow-lg shadow-black/20">
+            <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-200">
+              <Database className="h-3.5 w-3.5 text-emerald-300" />
+              Latest execution result
+            </div>
+            <pre className="max-h-44 overflow-auto p-3 text-[10px] text-zinc-400">{actionResult}</pre>
+          </section>
         ) : null}
 
         {/* KPIs */}

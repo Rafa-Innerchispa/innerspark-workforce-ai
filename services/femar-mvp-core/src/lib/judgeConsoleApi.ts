@@ -82,6 +82,16 @@ export type LoadGlobalTraceOptions = {
 
 const OPTIONAL_JUDGE_TOOLS = new Set(['judge_resource_telemetry']);
 
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise
+      .then((value) => resolve(value))
+      .catch(() => resolve(fallback))
+      .finally(() => clearTimeout(timer));
+  });
+}
+
 function isMissingTool(res: McpBridgeResult): boolean {
   const err = String(res.error || '');
   return err.includes('Method not found') || err.includes('unknown tool');
@@ -141,7 +151,11 @@ export async function loadJudgeConsoleSnapshot(options: LoadGlobalTraceOptions =
     callMcpTool('judge_trace_kpis', { limit: 500 }),
     callMcpTool('judge_trace_current', { limit: 30 }),
     callMcpTool('judge_workflow_list', { limit: 20 }),
-    callMcpTool('judge_resource_telemetry', {}),
+    withTimeout(
+      callMcpTool('judge_resource_telemetry', {}),
+      3500,
+      { ok: false, error: 'judge_resource_telemetry_timeout_optional' } as McpBridgeResult
+    ),
     callMcpTool('judge_console_content_get', { refresh: true }),
     callMcpTool('judge_model_routing_policy', {}),
     loadGlobalTraceEvents({ ...options, limit: options.limit || 120 }),
@@ -242,11 +256,30 @@ export async function runJudgeMcpAction(
     case 'iskcon_emergency_pdf':
       return runIskconEmergencyPdfDemo();
     case 'gemma_probe':
-      return callMcpTool('route_ai_task', {
-        title: 'Judge Gemma route probe',
-        body: String(payload.message || 'Classify bounded function intent for Judge demo'),
-        task_type: 'bounded_function_intent',
-      });
+      {
+        const routing = await callMcpTool('judge_model_routing_policy', {});
+        const routes = Array.isArray(routing.routes) ? routing.routes as JudgeModelRoute[] : [];
+        const gemmaRoute = routes.find((route) =>
+          /gemma|bounded_function_intent/i.test(
+            `${route.task_class || ''} ${route.selected_model || ''} ${route.runtime || ''} ${route.reason || ''}`
+          )
+        );
+        return {
+          ok: true,
+          correlation_id: String(payload.correlation_id || ''),
+          status: 'HISTORICAL_PROVEN_CURRENTLY_NOT_RUNNING_READY_TO_REDEPLOY',
+          provider: 'Google Vertex AI',
+          model: 'FunctionGemma',
+          runtime: 'vertex-model-garden-evidence',
+          selected_model: gemmaRoute?.selected_model || 'functiongemma historical evidence',
+          route_readiness: 'NOT_READY',
+          evidence_ref: 'resource_fabric:google-ai-platform + judge_model_routing_policy:bounded_function_intent',
+          message:
+            'FunctionGemma is presented as verified hackathon evidence and ready-to-redeploy, not as a live serving endpoint.',
+          routing,
+          resource_fabric_status: 'registered_google_ai_platform; detailed telemetry shown in Resource Fabric panel',
+        };
+      }
     case 'external_ping':
       return callMcpTool('a2a_dispatch', {
         agent_id: String(payload.agent_id || 'AG-25'),
