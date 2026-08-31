@@ -20,9 +20,33 @@ export default function Home() {
   };
   const [isProcessing, setIsProcessing] = useState(false);
   const [devices, setDevices] = useState<any[]>([]);
+  const [companyEmployees, setCompanyEmployees] = useState<any[]>(
+    mockEmployees.filter(e => e.companyId === activeCompanyId)
+  );
 
-  // Multi-tenant filter
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+      try {
+        const url = activeCompanyId
+          ? `/api/employees?companyId=${encodeURIComponent(activeCompanyId)}`
+          : '/api/employees';
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.employees) && data.employees.length > 0) {
+            setCompanyEmployees(data.employees);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching employees:", err);
+      }
+      if (!cancelled) setCompanyEmployees(fallback);
+    })();
+    return () => { cancelled = true; };
+  }, [activeCompanyId]);
 
   React.useEffect(() => {
     const fetchDevices = async () => {

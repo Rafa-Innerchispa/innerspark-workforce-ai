@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import GlassWidget from "@/components/GlassWidget";
 import { Clock, Calendar, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Search, Plus, Edit2, X, Save, User } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
-// Empleados globales (Simulación de DB)
-const EMPLOYEES_DB = [
+// Fallback local si Firestore/API no responde
+const EMPLOYEES_FALLBACK = [
   { id: "1790000001", name: "Juan Pérez" },
   { id: "1790000002", name: "María Fernanda Gómez" },
   { id: "1790000003", name: "Roberto Almeida" },
@@ -28,6 +28,7 @@ export default function SchedulesPage() {
   const itemsPerPage = 15;
 
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Array<{ id: string; name: string }>>(EMPLOYEES_FALLBACK);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Modal State
@@ -49,9 +50,47 @@ export default function SchedulesPage() {
     "Pendiente": "bg-blue-500/10 text-blue-400 border-blue-500/30"
   };
 
-  // Initialize massive mock data once
-  useMemo(() => {
-    if (isInitialized) return;
+  const withStatusColor = (rows: any[]) =>
+    rows.map((row) => ({
+      ...row,
+      color: statuses[row.status as keyof typeof statuses] || statuses.Pendiente,
+    }));
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let roster = EMPLOYEES_FALLBACK;
+      try {
+        const empRes = await fetch("/api/employees");
+        if (empRes.ok) {
+          const empData = await empRes.json();
+          if (!cancelled && Array.isArray(empData.employees) && empData.employees.length > 0) {
+            roster = empData.employees
+              .map((e: { id?: string; name?: string }) => ({
+                id: String(e.id || ""),
+                name: String(e.name || "Sin nombre"),
+              }))
+              .filter((e: { id: string }) => e.id);
+            setEmployees(roster);
+          }
+        }
+      } catch {
+        // keep EMPLOYEES_FALLBACK
+      }
+
+      try {
+        const res = await fetch("/api/schedules?limit=500");
+        if (!res.ok) throw new Error("schedules fetch failed");
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.schedules) && data.schedules.length > 0) {
+          setSchedules(withStatusColor(data.schedules));
+          setIsInitialized(true);
+          return;
+        }
+      } catch {
+        // fall through to legacy mock seed below
+      }
+      if (cancelled) return;
     const shiftsList = [
       "Mañana (08:00 - 17:00)", 
       "Tarde (14:00 - 22:00)", 
@@ -63,7 +102,7 @@ export default function SchedulesPage() {
     const today = new Date();
     
     for (let i = 0; i < 1500; i++) {
-      const emp = EMPLOYEES_DB[i % EMPLOYEES_DB.length];
+      const emp = roster[i % roster.length];
       const shift = shiftsList[i % shiftsList.length];
       
       const statusRoll = Math.random();
@@ -73,7 +112,7 @@ export default function SchedulesPage() {
       if (statusRoll > 0.95) status = statusKeys[3]; 
 
       const date = new Date(today);
-      date.setDate(date.getDate() - Math.floor(i / EMPLOYEES_DB.length));
+      date.setDate(date.getDate() - Math.floor(i / roster.length));
       
       initialSchedules.push({
         id: `SCH-${1500 - i}`,
@@ -85,9 +124,13 @@ export default function SchedulesPage() {
         color: statuses[status as keyof typeof statuses],
       });
     }
-    setSchedules(initialSchedules);
+    setSchedules(withStatusColor(initialSchedules));
     setIsInitialized(true);
-  }, [isInitialized]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleOpenCreate = () => {
     setEditingSchedule(null);
@@ -107,31 +150,48 @@ export default function SchedulesPage() {
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formEmployeeId || !formDate) return;
 
-    const selectedEmp = EMPLOYEES_DB.find(e => e.id === formEmployeeId);
+    const selectedEmp = employees.find(e => e.id === formEmployeeId);
     if (!selectedEmp) return;
 
     if (editingSchedule) {
-      // Edit (solo actualiza fecha, turno y estado. El empleado es fijo)
       setSchedules(schedules.map(s => 
         s.id === editingSchedule.id 
           ? { ...s, shift: formShift, date: formDate, status: formStatus, color: statuses[formStatus as keyof typeof statuses] } 
           : s
       ));
-    } else {
-      // Create
-      const newSchedule = {
+      setIsModalOpen(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: selectedEmp.id,
+          employeeName: selectedEmp.name,
+          shift: formShift,
+          date: formDate,
+          status: formStatus,
+        }),
+      });
+      if (!res.ok) throw new Error("create schedule failed");
+      const data = await res.json();
+      const created = withStatusColor([data.schedule])[0];
+      setSchedules([created, ...schedules]);
+    } catch {
+      const fallback = withStatusColor([{
         id: `SCH-NEW-${Date.now()}`,
         employeeId: selectedEmp.id,
         employeeName: selectedEmp.name,
         shift: formShift,
         date: formDate,
         status: formStatus,
-        color: statuses[formStatus as keyof typeof statuses]
-      };
-      setSchedules([newSchedule, ...schedules]);
+      }])[0];
+      setSchedules([fallback, ...schedules]);
     }
     setIsModalOpen(false);
   };
@@ -274,7 +334,7 @@ export default function SchedulesPage() {
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                   >
                     <option value="" disabled>Seleccione un empleado de la lista...</option>
-                    {EMPLOYEES_DB.map(emp => (
+                    {employees.map(emp => (
                       <option key={emp.id} value={emp.id}>
                         {emp.name} (C.I. {emp.id})
                       </option>

@@ -4,11 +4,51 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserCheck, Check, X, Shield, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { idTypesForCountry, type IdType } from '@/lib/identityDocument';
+
+const COMPANIES = [
+  { id: 'pcdoctor', label: 'PC Doctor AI' },
+  { id: 'femar', label: 'FEMAR S.A.' },
+  { id: 'iapro', label: 'IA Pro / Innerchispa' },
+  { id: 'innerspark_labs', label: 'InnerSpark Labs' },
+  { id: 'iskcon', label: 'ISKCON Guayaquil' },
+  { id: 'hackathon', label: 'Hackathon / demo' },
+];
+
+type PendingUser = {
+  id: string;
+  name: string;
+  email?: string;
+  cedula?: string;
+  idNumber?: string;
+  idType?: IdType;
+  documentCountry?: string;
+  phone?: string;
+  companyId: string;
+  companyRequest?: { type: string; slug: string; displayName: string };
+  authProvider?: string;
+  createdAt: string;
+};
+
+function idTypeLabel(country: string | undefined, idType: IdType | undefined): string {
+  if (!country || !idType) return idType || '—';
+  const match = idTypesForCountry(country).find((o) => o.value === idType);
+  return match?.labelEs || idType;
+}
+
+function formatDocument(u: PendingUser): string {
+  const number = u.idNumber || u.cedula || '—';
+  if (u.documentCountry && u.idType) {
+    return `${u.documentCountry} · ${idTypeLabel(u.documentCountry, u.idType)} · ${number}`;
+  }
+  return number;
+}
 
 export default function ApprovalsPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
+  const [companyByUser, setCompanyByUser] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +64,18 @@ export default function ApprovalsPage() {
       const res = await fetch('/api/auth/pending');
       if (res.ok) {
         const data = await res.json();
-        setPendingUsers(data.users || []);
+        const users: PendingUser[] = data.users || [];
+        setPendingUsers(users);
+        setCompanyByUser(
+          Object.fromEntries(
+            users.map((u) => [
+              u.id,
+              u.companyId?.startsWith('pending:')
+                ? u.companyRequest?.slug || u.companyId.replace(/^pending:/, '')
+                : u.companyId || 'pcdoctor',
+            ])
+          )
+        );
       }
     } catch (e) {
       console.error(e);
@@ -33,19 +84,24 @@ export default function ApprovalsPage() {
     }
   };
 
-  const handleAction = async (cedula: string, action: 'APPROVE' | 'REJECT', role?: string) => {
+  const handleAction = async (userId: string, action: 'APPROVE' | 'REJECT', role?: string) => {
     try {
       const res = await fetch('/api/auth/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cedula, action, role })
+        body: JSON.stringify({
+          userId,
+          action,
+          role,
+          companyId: companyByUser[userId],
+        }),
       });
       if (res.ok) {
-        fetchPending(); // Refresh list
+        fetchPending();
       } else {
         alert('Error al procesar la solicitud');
       }
-    } catch (e) {
+    } catch {
       alert('Error de conexión');
     }
   };
@@ -62,7 +118,7 @@ export default function ApprovalsPage() {
           Aprobaciones Pendientes
         </h1>
         <p className="text-zinc-400">
-          Revisa y aprueba las solicitudes de registro para las empresas.
+          Revisa y aprueba las solicitudes de registro. Puedes corregir la empresa antes de aprobar; los módulos se asignan según tenant + rol.
         </p>
       </div>
 
@@ -77,8 +133,10 @@ export default function ApprovalsPage() {
               <thead>
                 <tr className="bg-zinc-900/50 border-b border-zinc-800">
                   <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Usuario</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Cédula</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Empresa</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Correo</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Documento</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Teléfono</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Empresa (asignar)</th>
                   <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
@@ -87,32 +145,60 @@ export default function ApprovalsPage() {
                   <tr key={u.id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-medium text-zinc-200">{u.name}</div>
-                      <div className="text-xs text-zinc-500">{new Date(u.createdAt).toLocaleString()}</div>
+                      <div className="text-xs text-zinc-500">
+                        {u.authProvider === 'google' ? 'Google · ' : ''}
+                        {new Date(u.createdAt).toLocaleString()}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-zinc-300 font-mono text-sm">{u.cedula}</td>
+                    <td className="px-6 py-4 text-zinc-400 text-sm">{u.email || '—'}</td>
+                    <td className="px-6 py-4 text-zinc-300 font-mono text-xs leading-relaxed max-w-[220px]">
+                      {formatDocument(u)}
+                    </td>
+                    <td className="px-6 py-4 text-zinc-400 text-sm">{u.phone || '—'}</td>
                     <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full text-xs font-medium border border-blue-500/20 uppercase">
-                        {u.companyId}
-                      </span>
+                      <div className="text-xs text-zinc-400 mb-2">
+                        {u.companyRequest?.type === 'new_tenant' ? (
+                          <span className="text-amber-400">Nueva empresa: </span>
+                        ) : u.companyRequest ? (
+                          <span>Solicita: </span>
+                        ) : null}
+                        {u.companyRequest?.displayName || u.companyId}
+                      </div>
+                      <select
+                        value={companyByUser[u.id] || u.companyId.replace(/^pending:/, '')}
+                        onChange={(e) =>
+                          setCompanyByUser((prev) => ({ ...prev, [u.id]: e.target.value }))
+                        }
+                        className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-200 w-full max-w-[180px]"
+                      >
+                        {COMPANIES.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
+                          </option>
+                        ))}
+                        {u.companyRequest?.type === 'new_tenant' && (
+                          <option value={u.companyRequest.slug}>{u.companyRequest.displayName} (nuevo)</option>
+                        )}
+                      </select>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => handleAction(u.cedula, 'APPROVE', 'admin')}
+                        <button
+                          onClick={() => handleAction(u.id, 'APPROVE', 'admin')}
                           className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-xs font-medium border border-green-500/20 transition-colors"
                           title="Aprobar como Administrador"
                         >
                           <Shield className="w-3.5 h-3.5" /> Admin
                         </button>
-                        <button 
-                          onClick={() => handleAction(u.cedula, 'APPROVE', 'employee')}
+                        <button
+                          onClick={() => handleAction(u.id, 'APPROVE', 'employee')}
                           className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-medium border border-blue-500/20 transition-colors"
                           title="Aprobar como Empleado Regular"
                         >
                           <User className="w-3.5 h-3.5" /> Empleado
                         </button>
-                        <button 
-                          onClick={() => handleAction(u.cedula, 'REJECT')}
+                        <button
+                          onClick={() => handleAction(u.id, 'REJECT')}
                           className="flex items-center justify-center w-8 h-8 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20 transition-colors ml-2"
                           title="Rechazar solicitud"
                         >

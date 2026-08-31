@@ -1,4 +1,4 @@
-import { processCheckinNovelty } from './noveltyService';
+import { persistNovelty, processCheckinNovelty } from './noveltyService';
 
 // Mock the db
 jest.mock('./firebase', () => ({
@@ -31,5 +31,21 @@ describe('Novelty Service', () => {
     const novelty = await processCheckinNovelty('user1', '2026-08-05 18:45:00', 'MOBILE');
     expect(novelty.type).toBe('OVERTIME');
     expect(novelty.minutes).toBe(45);
+  });
+
+  it('throws when Firestore is not initialized', async () => {
+    const firebase = require('./firebase') as { db: unknown };
+    const previous = firebase.db;
+    firebase.db = null;
+    await expect(
+      persistNovelty({
+        user_id: 'u1',
+        source: 'MOBILE',
+        timestamp: new Date().toISOString(),
+        type: 'ON_TIME',
+        created_at: new Date().toISOString(),
+      }),
+    ).rejects.toThrow('Firestore not initialized');
+    firebase.db = previous;
   });
 });

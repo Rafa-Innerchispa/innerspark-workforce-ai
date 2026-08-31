@@ -77,8 +77,21 @@ export async function processCheckinNovelty(userId: string, timestampStr: string
     created_at: new Date().toISOString()
   };
 
-  const docRef = db.collection('novelties').doc();
-  await docRef.set(novelty);
-  
+  await persistNovelty(novelty);
   return novelty;
+}
+
+export async function persistNovelty(novelty: Novelty): Promise<void> {
+  if (!db || typeof db.collection !== 'function') {
+    throw new Error('Firestore not initialized');
+  }
+  const collection = db.collection('novelties');
+  if (!collection || typeof collection.doc !== 'function') {
+    throw new Error('Firestore collection unavailable');
+  }
+  const docRef = collection.doc();
+  if (!docRef || typeof docRef.set !== 'function') {
+    throw new Error('Firestore document reference unavailable');
+  }
+  await docRef.set(novelty);
 }

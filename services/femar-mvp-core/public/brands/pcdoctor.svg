@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="PC Doctor AI">
+  <defs>
+    <linearGradient id="pcG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#9333ea"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="96" height="96" rx="24" fill="url(#pcG)" opacity="0.2"/>
+  <path fill="url(#pcG)" d="M38 78V42h28c14 0 22 8 22 18s-8 18-22 18H52v12H38zm14-26h12c6 0 10-3 10-8s-4-8-10-8H52v16z"/>
+</svg>

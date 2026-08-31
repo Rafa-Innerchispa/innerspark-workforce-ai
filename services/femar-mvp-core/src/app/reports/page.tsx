@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import GlassWidget from "@/components/GlassWidget";
 import { FileBarChart, Download, FileSpreadsheet, Calculator, Filter, Printer, User, Clock, AlertTriangle, MapPin } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
@@ -38,7 +38,34 @@ function ReportsContent() {
   const searchParams = useSearchParams();
   const { activeCompanyId } = useAuth();
 
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const mockFallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const [companyEmployees, setCompanyEmployees] = useState<any[]>(mockFallback);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+      try {
+        const url = activeCompanyId
+          ? `/api/employees?companyId=${encodeURIComponent(activeCompanyId)}`
+          : "/api/employees";
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.employees) && data.employees.length > 0) {
+            setCompanyEmployees(data.employees);
+            return;
+          }
+        }
+      } catch {
+        // fallback below
+      }
+      if (!cancelled) setCompanyEmployees(fallback);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompanyId]);
 
   const [reportType, setReportType] = useState("nomina"); // nomina, faltas, atrasos, consolidado
   const [selectedEmployee, setSelectedEmployee] = useState("all");

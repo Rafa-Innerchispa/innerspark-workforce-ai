@@ -1,13 +1,18 @@
-import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
+import { initializeApp, getApps, applicationDefault, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
-// Initialize Firebase Admin if not already initialized
+function resolveFirebaseCredential() {
+  const inlineKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
+  if (inlineKey) {
+    return cert(JSON.parse(inlineKey));
+  }
+  // Uses GOOGLE_APPLICATION_CREDENTIALS or gcloud ADC when set in the runtime environment.
+  return applicationDefault();
+}
+
 if (!getApps().length) {
-  // Uses Application Default Credentials (GCP)
-  initializeApp({
-    credential: applicationDefault()
-  });
+  initializeApp({ credential: resolveFirebaseCredential() });
 }
 
 export const db = getFirestore();

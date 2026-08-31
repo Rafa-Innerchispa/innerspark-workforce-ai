@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { requireModuleAccess } from '@/lib/sessionAuth';
 
 export async function POST(request: Request) {
   try {
+    const user = await requireModuleAccess('workforce-ai');
+    if (user instanceof NextResponse) return user;
+
     const data = await request.json();
     const rows = data.rows || [];
 

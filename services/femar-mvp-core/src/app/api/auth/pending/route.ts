@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { requireSuperAdmin } from '@/lib/sessionAuth';
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
+    const gate = await requireSuperAdmin();
+    if (gate instanceof NextResponse) return gate;
+
     const snapshot = await db.collection('users').where('status', '==', 'PENDING').get();
     const pendingUsers: any[] = [];
     

@@ -1,41 +1,84 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import crypto from 'crypto';
+import { HACKATHON_DEMO_USERS, ISKCON_DEMO_USERS } from '@/lib/entityEntitlements';
+import { isJudgeDemoLoginId, JUDGE_DEMO_PASSWORD } from '@/lib/judgeCredentials';
+import { hashPassword, verifyPassword } from '@/lib/passwordHash';
+import { applySessionCookies } from '@/lib/sessionCookies';
+
+async function resolveUserDocument(loginId: string) {
+  const trimmed = loginId.trim();
+  const docRef = db.collection('users').doc(trimmed);
+  let doc = await docRef.get();
+
+  if (!doc.exists && trimmed.includes('@')) {
+    const snap = await db.collection('users').where('email', '==', trimmed.toLowerCase()).limit(1).get();
+    if (!snap.empty) doc = snap.docs[0];
+  }
+
+  if (!doc.exists) {
+    for (const field of ['idNumber', 'cedula'] as const) {
+      const snap = await db.collection('users').where(field, '==', trimmed).limit(1).get();
+      if (!snap.empty) {
+        doc = snap.docs[0];
+        break;
+      }
+    }
+  }
+
+  return doc;
+}
 
 export async function POST(req: Request) {
   try {
     const { cedula, password } = await req.json();
     
     if (!cedula || !password) {
-      return NextResponse.json({ success: false, message: 'Cédula y contraseña son obligatorias' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Usuario/cédula y contraseña son obligatorios' }, { status: 400 });
     }
 
-    // Hardcoded SuperAdmin and Admins for MVP demos (Removed Passwords for Security)
     const mockDemos: Record<string, any> = {
-      '0914832423': { id: '0914832423', cedula: '0914832423', name: 'Super Administrador (Rafa)', role: 'superadmin', companyId: 'femar', status: 'APPROVED' },
-      '0950626317': { id: '0950626317', cedula: '0950626317', name: 'Andrés Ramos', role: 'admin', companyId: 'iapro', status: 'APPROVED' },
-      '1111111111': { id: '1111111111', cedula: '1111111111', name: 'Admin FEMAR', role: 'admin', companyId: 'femar', status: 'APPROVED' },
-      '2222222222': { id: '2222222222', cedula: '2222222222', name: 'Admin PC Doctor', role: 'admin', companyId: 'pcdoctor', status: 'APPROVED' },
-      'DEVPOST-JUDGE': { id: 'DEVPOST-JUDGE', cedula: 'DEVPOST-JUDGE', name: 'XPRIZE Judge Admin', role: 'admin', companyId: 'innerspark_labs', status: 'APPROVED' }
+      '0914832423': { id: '0914832423', cedula: '0914832423', name: 'Super Administrador (Rafa)', role: 'superadmin', companyId: 'pcdoctor', status: 'APPROVED', modules: ['workforce-ai', 'smart-quoter', 'quoteops', 'visitors', 'iskcon-desk', 'founderos', 'inneros-admin', 'a2a-gateway'] },
+      '0950626317': { id: '0950626317', cedula: '0950626317', name: 'Andrés Ramos', role: 'admin', companyId: 'iapro', status: 'APPROVED', modules: ['workforce-ai'] },
+      '1111111111': { id: '1111111111', cedula: '1111111111', name: 'Admin FEMAR', role: 'admin', companyId: 'femar', status: 'APPROVED', modules: ['workforce-ai'] },
+      '2222222222': { id: '2222222222', cedula: '2222222222', name: 'Admin PC Doctor', role: 'admin', companyId: 'pcdoctor', status: 'APPROVED', modules: ['workforce-ai', 'smart-quoter', 'quoteops', 'visitors', 'iskcon-desk', 'founderos', 'inneros-admin'] },
+      ...Object.fromEntries(
+        Object.entries(HACKATHON_DEMO_USERS).map(([k, v]) => [
+          k,
+          { id: k, cedula: k, name: v.name, role: v.role, companyId: v.companyId, status: 'APPROVED', modules: ['workforce-ai', 'smart-quoter', 'quoteops', 'visitors', 'iskcon-desk', 'founderos'] },
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(ISKCON_DEMO_USERS).map(([k, v]) => [
+          k,
+          { id: k, cedula: k, name: v.name, role: v.role, companyId: v.companyId, status: 'APPROVED', modules: v.modules },
+        ])
+      ),
     };
 
-    const docRef = db.collection('users').doc(cedula);
+    const loginKey = String(cedula).trim();
+    const loginKeyUpper = loginKey.toUpperCase();
+    const judgeDemo = isJudgeDemoLoginId(loginKey);
+    const docRef = db.collection('users').doc(judgeDemo ? loginKeyUpper : loginKey);
     let doc = await docRef.get();
 
     // Auto-seed hardcoded admins for MVP if they don't exist
-    if (!doc.exists && mockDemos[cedula]) {
-      const newAdmin = mockDemos[cedula];
-      // Generate scrypt password using the entered password
-      const salt = crypto.randomBytes(16).toString('hex');
-      const hashedBuffer = crypto.scryptSync(password, salt, 64);
-      const newPassword = `${salt}:${hashedBuffer.toString('hex')}`;
-      
+    if (!doc.exists && (mockDemos[loginKeyUpper] || mockDemos[loginKey])) {
+      const seedKey = mockDemos[loginKeyUpper] ? loginKeyUpper : loginKey;
+      const newAdmin = mockDemos[seedKey];
+      const seedPassword = judgeDemo ? JUDGE_DEMO_PASSWORD : password;
       await docRef.set({
         ...newAdmin,
-        password: newPassword,
-        createdAt: new Date().toISOString()
+        id: seedKey,
+        cedula: seedKey,
+        password: hashPassword(seedPassword),
+        authMethods: ['password'],
+        createdAt: new Date().toISOString(),
       });
-      doc = await docRef.get(); // Re-fetch
+      doc = await docRef.get();
+    }
+
+    if (!doc.exists) {
+      doc = await resolveUserDocument(loginKey);
     }
 
     if (!doc.exists) {
@@ -43,22 +86,13 @@ export async function POST(req: Request) {
     }
 
     const user = doc.data();
-    
-    let isMatch = false;
-    if (user?.password?.includes(':')) {
-       // New security format: scrypt with salt
-       const [salt, key] = user.password.split(':');
-       const hashedBuffer = crypto.scryptSync(password, salt, 64);
-       isMatch = key === hashedBuffer.toString('hex');
-    } else {
-       // Legacy format: raw sha256
-       const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-       isMatch = user?.password === hashedPassword;
-    }
+    let isMatch = verifyPassword(password, user?.password);
 
-    // Temporary fallback for Judges or Mock Demos IF they don't exist in DB yet but we want them to pass for MVP.
-    // In production, we ONLY check DB, but we keep the mock object for frontend structural fallback if needed.
-    // Since we removed the hardcoded password, they MUST be in DB with real hashed passwords now!
+    // Canonical judge password — reset hash if an old first-login password was stored
+    if (!isMatch && judgeDemo && password === JUDGE_DEMO_PASSWORD) {
+      await docRef.update({ password: hashPassword(JUDGE_DEMO_PASSWORD), authMethods: ['password'] });
+      isMatch = true;
+    }
 
     if (!isMatch) {
       return NextResponse.json({ success: false, message: 'Contraseña incorrecta' }, { status: 401 });
@@ -74,14 +108,10 @@ export async function POST(req: Request) {
 
     // Return user without password
     const { password: _, ...userSafe } = user!;
+    const sessionId = doc.id;
     
-    const response = NextResponse.json({ success: true, user: userSafe });
-    response.cookies.set('session_token', userSafe.id, { 
-       httpOnly: true, 
-       secure: false, // MVP FIX: Avoids issues behind proxies or local HTTP
-       sameSite: 'lax', 
-       path: '/' 
-    });
+    const response = NextResponse.json({ success: true, user: { ...userSafe, id: sessionId } });
+    applySessionCookies(response, req, sessionId, user?.companyId);
     return response;
 
   } catch (error) {

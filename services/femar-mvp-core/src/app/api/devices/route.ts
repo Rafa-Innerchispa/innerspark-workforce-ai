@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { requireModuleAccess } from '@/lib/sessionAuth';
 
 export async function GET() {
   try {
+    const user = await requireModuleAccess('workforce-ai');
+    if (user instanceof NextResponse) return user;
+
     const devicesRef = db.collection('devices');
     const snapshot = await devicesRef.get();
     

@@ -1,55 +1,76 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import crypto from 'crypto';
+import { notifyAdminPendingUser } from '@/lib/authPolicy';
+import {
+  leadUserDocument,
+  resolveIdNumber,
+  validateLeadRegistration,
+  type LeadRegistrationPayload,
+} from '@/lib/leadRegistration';
+import { resolveOAuthOrigin } from '@/lib/googleAuth';
 
 export async function POST(req: Request) {
   try {
-    const { cedula, name, password, companyId } = await req.json();
+    const body = (await req.json()) as LeadRegistrationPayload;
+    const payload: LeadRegistrationPayload = {
+      ...body,
+      idNumber: resolveIdNumber(body),
+      cedula: resolveIdNumber(body),
+    };
 
-    if (!cedula || !name || !password || !companyId) {
-      return NextResponse.json({ success: false, message: 'Todos los campos son obligatorios' }, { status: 400 });
+    const validationError = validateLeadRegistration(payload);
+    if (validationError) {
+      return NextResponse.json({ success: false, message: validationError }, { status: 400 });
     }
 
-    const docRef = db.collection('users').doc(cedula);
-    const doc = await docRef.get();
-
-    if (doc.exists) {
-      return NextResponse.json({ success: false, message: 'La cédula ya está registrada' }, { status: 409 });
-    }
-
-    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-
-    await docRef.set({
-      cedula,
-      name,
-      password: hashedPassword,
-      companyId,
-      role: 'employee', // Default role, admin can upgrade
-      status: 'PENDING',
-      createdAt: new Date().toISOString()
+    const userDoc = leadUserDocument(payload, {
+      authProvider: 'password',
+      authMethods: ['password'],
+      createdAt: new Date().toISOString(),
     });
 
-    // Request email notification via Firebase Trigger Email extension
-    try {
-      await db.collection('mail').add({
-        to: 'rafagye@gmail.com',
-        message: {
-          subject: 'Nuevo Usuario Pendiente de Aprobación - Workforce AI',
-          html: `
-            <h2>Nuevo registro en Workforce AI</h2>
-            <p>El usuario <strong>${name}</strong> (Cédula/ID: ${cedula}, Empresa: ${companyId}) ha solicitado acceso al sistema.</p>
-            <p>Actualmente se encuentra en estado <strong>PENDING</strong>.</p>
-            <br>
-            <p><a href="http://workforce.pcdoctor.ai/" style="background:#2563eb;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Ingresar al Sistema para Aprobar</a></p>
-          `
-        }
-      });
-    } catch (e) {
-      console.warn("Could not queue email notification", e);
+    const docRef = db.collection('users').doc(userDoc.id);
+    const doc = await docRef.get();
+    if (doc.exists) {
+      return NextResponse.json({ success: false, message: 'Este documento ya está registrado' }, { status: 409 });
     }
 
-    return NextResponse.json({ success: true, message: 'Registro exitoso, en espera de aprobación.' });
+    if (payload.email) {
+      const emailSnap = await db
+        .collection('users')
+        .where('email', '==', String(payload.email).toLowerCase())
+        .limit(1)
+        .get();
+      if (!emailSnap.empty) {
+        return NextResponse.json({ success: false, message: 'Este correo ya está registrado' }, { status: 409 });
+      }
+    }
 
+    const url = new URL(req.url);
+    const origin = resolveOAuthOrigin(url, null, req.headers);
+
+    await docRef.set(userDoc);
+
+    await notifyAdminPendingUser({
+      name: userDoc.name,
+      cedula: userDoc.idNumber,
+      idNumber: userDoc.idNumber,
+      idType: userDoc.idType,
+      documentCountry: userDoc.documentCountry,
+      email: userDoc.email,
+      phone: userDoc.phone,
+      address: `${userDoc.address}, ${userDoc.city}, ${userDoc.country}`,
+      companyId: userDoc.companyId,
+      companyRequest: userDoc.companyRequest,
+      authProvider: 'password',
+      origin,
+      birthDate: userDoc.birthDate,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Registro enviado. Un administrador debe aprobar tu acceso antes de ingresar.',
+    });
   } catch (error) {
     console.error('Error in registration:', error);
     return NextResponse.json({ success: false, message: 'Error interno del servidor' }, { status: 500 });

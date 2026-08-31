@@ -14,26 +14,55 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isRegisterPage = pathname === '/register';
   const isModuleSelection = pathname === '/modules';
   const isTagsPage = pathname === '/tags';
-  const isFullPage = isLoginPage || isRegisterPage || isModuleSelection || isTagsPage;
+  const isInnerOSLogin = pathname === '/app/login';
+  const isInnerOSRegister = pathname === '/app/register';
+  const isInnerOSOnboarding = pathname.startsWith('/app/onboarding/');
+  const isInnerOSHandoff = pathname.startsWith('/app/auth/handoff');
+  const isInnerOSDesk = pathname === '/app/desk';
+  const isInnerOSPending = pathname === '/app/pending-approval';
+  const isInnerOSModules = pathname === '/app/modules';
+  const isInnerOSJudge = pathname === '/app/judge';
+  const isInnerOSApp = pathname.startsWith('/app/');
+  const isInnerOSPublicRoute =
+    isInnerOSLogin || isInnerOSRegister || isInnerOSOnboarding || isInnerOSPending || isInnerOSHandoff;
+  const isFullPage =
+    isLoginPage ||
+    isRegisterPage ||
+    isModuleSelection ||
+    isTagsPage ||
+    isInnerOSLogin ||
+    isInnerOSRegister ||
+    isInnerOSOnboarding ||
+    isInnerOSPending ||
+    isInnerOSHandoff ||
+    isInnerOSDesk ||
+    isInnerOSModules ||
+    isInnerOSJudge;
 
   useEffect(() => {
     if (!isLoading) {
-      if (!user && !isLoginPage && !isRegisterPage) {
-        // Redirect unauthenticated users to login
-        router.push('/login');
+      if (!user && !isLoginPage && !isRegisterPage && !isInnerOSPublicRoute) {
+        router.push(isInnerOSApp ? '/app/login' : '/login');
       } else if (user && (isLoginPage || isRegisterPage)) {
-        // Redirect authenticated users away from login
         if (user.role === 'admin' || user.role === 'superadmin') {
           router.push('/modules');
         } else {
           router.push('/mobile');
         }
-      } else if (user && user.role === 'employee' && pathname !== '/mobile') {
-        // Restrict employees to mobile page
+      } else if (user && isInnerOSLogin) {
+        const cid = String(user.companyId || '').toLowerCase();
+        if (cid === 'hackathon') {
+          router.push('/app/judge');
+        } else {
+          router.push('/app/modules');
+        }
+      } else if (user && isInnerOSModules && String(user.companyId || '').toLowerCase() === 'hackathon') {
+        router.replace('/app/judge');
+      } else if (user && user.role === 'employee' && !isInnerOSApp && pathname !== '/mobile') {
         router.push('/mobile');
       }
     }
-  }, [user, isLoading, isLoginPage, router, pathname]);
+  }, [user, isLoading, isLoginPage, isRegisterPage, isInnerOSPublicRoute, isInnerOSApp, router, pathname]);
 
   if (isLoading) {
     return (

@@ -1,19 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import {
+  assertTenantAccess,
+  requireModuleAccess,
+  requireSession,
+} from '@/lib/sessionAuth';
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireModuleAccess('workforce-ai');
+    if (user instanceof NextResponse) return user;
+
     const employeeData = await req.json();
     
     if (!employeeData.id || !employeeData.name) {
       return NextResponse.json({ error: 'ID and Name are required' }, { status: 400 });
     }
 
+    const tenantDenied = assertTenantAccess(user, employeeData.companyId);
+    if (tenantDenied) return tenantDenied;
+
+    const companyId =
+      user.role === 'superadmin' && employeeData.companyId
+        ? employeeData.companyId
+        : user.companyId;
+
     // Save or update employee in Firestore
     const empRef = db.collection('employees').doc(employeeData.id);
     await empRef.set({
       ...employeeData,
-      updatedAt: new Date().toISOString()
+      companyId,
+      updatedAt: new Date().toISOString(),
     }, { merge: true });
 
     // Enqueue command to all active devices
@@ -51,13 +68,18 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireModuleAccess('workforce-ai');
+    if (user instanceof NextResponse) return user;
+
     const url = new URL(req.url);
-    const companyId = url.searchParams.get('companyId');
-    let query: FirebaseFirestore.Query = db.collection('employees');
-    
-    if (companyId) {
-      query = query.where('companyId', '==', companyId);
-    }
+    const requestedCompany = url.searchParams.get('companyId');
+    const tenantDenied = assertTenantAccess(user, requestedCompany);
+    if (tenantDenied) return tenantDenied;
+
+    const companyId =
+      user.role === 'superadmin' && requestedCompany ? requestedCompany : user.companyId;
+
+    let query: FirebaseFirestore.Query = db.collection('employees').where('companyId', '==', companyId);
     
     const snapshot = await query.get();
     const employees = snapshot.docs.map(doc => ({ ...doc.data() }));

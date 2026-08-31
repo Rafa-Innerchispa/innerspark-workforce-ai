@@ -1,0 +1,11 @@
+{
+  "projects": {},
+  "targets": {},
+  "etags": {
+    "innerspark-workforce-ai": {
+      "extensionInstances": {
+        "firestore-send-email": "0cfc1cb88d113c1e99e958b79c4b7bef254320e3ee968a04f140f49b7cb874ce"
+      }
+    }
+  }
+}

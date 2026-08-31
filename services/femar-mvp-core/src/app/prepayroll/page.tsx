@@ -1,14 +1,41 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { mockEmployees } from '@/lib/mockData';
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function PrePayrollPage() {
   const [filter, setFilter] = useState('ALL');
   const { activeCompanyId } = useAuth();
-  
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+
+  const mockFallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const [companyEmployees, setCompanyEmployees] = useState(mockFallback);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+      try {
+        const url = activeCompanyId
+          ? `/api/employees?companyId=${encodeURIComponent(activeCompanyId)}`
+          : '/api/employees';
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.employees) && data.employees.length > 0) {
+            setCompanyEmployees(data.employees);
+            return;
+          }
+        }
+      } catch {
+        // fallback below
+      }
+      if (!cancelled) setCompanyEmployees(fallback);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompanyId]);
 
   // Generate mock novelties for company employees
   const novelties = companyEmployees.flatMap((emp, i) => {

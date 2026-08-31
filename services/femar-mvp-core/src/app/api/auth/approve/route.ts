@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { resolveAllowedModuleIds } from '@/lib/entityEntitlements';
+import { requireSuperAdmin } from '@/lib/sessionAuth';
 
 export async function POST(req: Request) {
   try {
-    const { cedula, action, role } = await req.json();
+    const gate = await requireSuperAdmin();
+    if (gate instanceof NextResponse) return gate;
 
-    if (!cedula || !action) {
+    const { cedula, userId, action, role, companyId: companyOverride } = await req.json();
+    const docKey = String(userId || cedula || '').trim();
+
+    if (!docKey || !action) {
       return NextResponse.json({ success: false, message: 'Faltan parámetros' }, { status: 400 });
     }
 
-    const docRef = db.collection('users').doc(cedula);
+    const docRef = db.collection('users').doc(docKey);
     const doc = await docRef.get();
 
     if (!doc.exists) {
@@ -17,10 +23,18 @@ export async function POST(req: Request) {
     }
 
     if (action === 'APPROVE') {
+      const approvedRole = role || 'employee';
+      const existing = doc.data() || {};
+      const finalCompanyId = String(companyOverride || existing.companyId || 'pcdoctor').trim();
+      const modules = resolveAllowedModuleIds(finalCompanyId, approvedRole, existing.modules);
       await docRef.update({
         status: 'APPROVED',
-        role: role || 'employee', // Can be 'employee' or 'admin'
-        updatedAt: new Date().toISOString()
+        role: approvedRole,
+        companyId: finalCompanyId,
+        modules,
+        approvedAt: new Date().toISOString(),
+        approvedBy: gate.id,
+        updatedAt: new Date().toISOString(),
       });
     } else if (action === 'REJECT') {
       await docRef.update({

@@ -1,7 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { mockEmployees } from '@/lib/mockData';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 type Role = 'admin' | 'employee' | null;
 
@@ -11,51 +10,68 @@ interface AuthUser {
   role: Role | 'superadmin';
   companyId: string;
   modules?: string[];
+  email?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
+  allowedModuleIds: string[];
   login: (cedula: string, password?: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
   activeCompanyId: string | null;
   setActiveCompanyId: (id: string) => void;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  allowedModuleIds: [],
   login: async () => false,
   logout: () => {},
   isLoading: true,
   activeCompanyId: null,
   setActiveCompanyId: () => {},
+  refreshSession: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [allowedModuleIds, setAllowedModuleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
   const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Check local storage for session on mount
-    const stored = localStorage.getItem('femar_session');
-    if (stored) {
-      try {
-        const parsedUser = JSON.parse(stored);
-        setUser(parsedUser);
-        setActiveCompanyIdState(localStorage.getItem('femar_active_company') || parsedUser.companyId);
-      } catch (e) {
-        console.error('Invalid session', e);
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (!res.ok) {
+        setUser(null);
+        setAllowedModuleIds([]);
+        return;
       }
+      const data = await res.json();
+      const sessionUser = data.user as AuthUser;
+      setUser(sessionUser);
+      setAllowedModuleIds(data.allowedModuleIds || []);
+      localStorage.setItem('femar_session', JSON.stringify(sessionUser));
+      const active =
+        localStorage.getItem('femar_active_company') ||
+        (sessionUser.role === 'superadmin' ? 'pcdoctor' : sessionUser.companyId);
+      setActiveCompanyIdState(active);
+      localStorage.setItem('femar_active_company', active);
+    } catch {
+      setUser(null);
+      setAllowedModuleIds([]);
     }
-    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    refreshSession().finally(() => setIsLoading(false));
+  }, [refreshSession]);
 
   const setActiveCompanyId = (id: string) => {
     setActiveCompanyIdState(id);
     localStorage.setItem('femar_active_company', id);
-    // Reload page to re-fetch data based on new company
     window.location.reload();
   };
 
@@ -64,23 +80,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cedula, password })
+        body: JSON.stringify({ cedula, password }),
       });
-      
+
       if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        localStorage.setItem('femar_session', JSON.stringify(data.user));
-        
-        // Handle superadmin active company (defaults to femar or their assigned company)
-        if (data.user.role === 'superadmin') {
-          setActiveCompanyIdState('femar'); // Default to first company
-          localStorage.setItem('femar_active_company', 'femar');
-        } else {
-          setActiveCompanyIdState(data.user.companyId);
-          localStorage.setItem('femar_active_company', data.user.companyId);
-        }
-        
+        await refreshSession();
         return true;
       }
       return false;
@@ -91,14 +95,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
     setUser(null);
+    setAllowedModuleIds([]);
     setActiveCompanyIdState(null);
     localStorage.removeItem('femar_session');
     localStorage.removeItem('femar_active_company');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, activeCompanyId, setActiveCompanyId }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        allowedModuleIds,
+        login,
+        logout,
+        isLoading,
+        activeCompanyId,
+        setActiveCompanyId,
+        refreshSession,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

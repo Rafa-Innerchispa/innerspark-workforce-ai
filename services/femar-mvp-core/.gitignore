@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+temp_env
 
 # vercel
 .vercel
@@ -39,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local IDE/task state
+.cursor/
+
+# Firebase extension params (contains SMTP password)
+extensions/firestore-send-email.env
+firebase/extensions/firestore-send-email.env
+.tmp-smtp-secret.txt

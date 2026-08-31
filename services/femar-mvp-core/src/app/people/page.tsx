@@ -11,31 +11,39 @@ export default function PeoplePage() {
   const { t } = useI18n();
   const { activeCompanyId } = useAuth();
 
-  const [employees, setEmployees] = useState<any[]>(
-    activeCompanyId === 'femar' 
-      ? mockEmployees.filter(e => e.companyId === activeCompanyId) 
-      : []
-  );
+  const mockFallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const [employees, setEmployees] = useState<any[]>(mockFallback);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
 
   React.useEffect(() => {
+    let cancelled = false;
     const fetchEmps = async () => {
+      setLoadingEmployees(true);
+      const fallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
       try {
-        const res = await fetch('/api/employees');
+        const url = activeCompanyId
+          ? `/api/employees?companyId=${encodeURIComponent(activeCompanyId)}`
+          : '/api/employees';
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          if (data.employees && data.employees.length > 0) {
-             setEmployees(data.employees);
+          if (!cancelled && Array.isArray(data.employees) && data.employees.length > 0) {
+            setEmployees(data.employees);
+            setLoadingEmployees(false);
+            return;
           }
         }
       } catch (err) {
         console.error("Error fetching employees:", err);
-      } finally {
+      }
+      if (!cancelled) {
+        setEmployees(fallback);
         setLoadingEmployees(false);
       }
     };
     fetchEmps();
-  }, []);
+    return () => { cancelled = true; };
+  }, [activeCompanyId]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any | null>(null);

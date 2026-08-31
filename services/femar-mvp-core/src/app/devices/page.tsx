@@ -11,8 +11,9 @@ import Link from "next/link";
 export default function DevicesPage() {
   const { t } = useI18n();
   const { activeCompanyId } = useAuth();
-  
-  const companyEmployees = mockEmployees.filter(e => e.companyId === activeCompanyId);
+
+  const mockFallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+  const [companyEmployees, setCompanyEmployees] = useState<any[]>(mockFallback);
   const [pendingDevices, setPendingDevices] = useState<any[]>([]);
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
   const [realtimeLogs, setRealtimeLogs] = useState<any[]>([]);
@@ -47,6 +48,31 @@ export default function DevicesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchEmps = async () => {
+      const fallback = mockEmployees.filter(e => e.companyId === activeCompanyId);
+      try {
+        const url = activeCompanyId
+          ? `/api/employees?companyId=${encodeURIComponent(activeCompanyId)}`
+          : '/api/employees';
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.employees) && data.employees.length > 0) {
+            setCompanyEmployees(data.employees);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching employees:", err);
+      }
+      if (!cancelled) setCompanyEmployees(fallback);
+    };
+    fetchEmps();
+    return () => { cancelled = true; };
+  }, [activeCompanyId]);
 
   useEffect(() => {
     fetchDevices();

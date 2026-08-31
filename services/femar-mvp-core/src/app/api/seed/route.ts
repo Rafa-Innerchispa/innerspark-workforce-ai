@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import { requireSuperAdmin } from '@/lib/sessionAuth';
 
 export async function GET() {
+  const user = await requireSuperAdmin();
+  if (user instanceof NextResponse) return user;
+
   const batch = db.batch();
 
   const clients = [
