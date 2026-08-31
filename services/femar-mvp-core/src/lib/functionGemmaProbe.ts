@@ -8,6 +8,7 @@ const DEFAULT_ENDPOINT_ID = 'mg-endpoint-98cacc40-0e4e-41fd-8f86-91a93146e936';
 const DEFAULT_ENDPOINT_DNS =
   'mg-endpoint-98cacc40-0e4e-41fd-8f86-91a93146e936.us-central1-92544879138.prediction.vertexai.goog';
 const DEFAULT_DEPLOYED_MODEL_ID = '2620158748978577408';
+const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
 function gemmaConfig() {
   return {
@@ -17,6 +18,25 @@ function gemmaConfig() {
     endpointDns: (process.env.INNEROS_FUNCTION_GEMMA_ENDPOINT_DNS ?? DEFAULT_ENDPOINT_DNS).trim(),
     deployedModelId: (process.env.INNEROS_FUNCTION_GEMMA_DEPLOYED_MODEL_ID ?? DEFAULT_DEPLOYED_MODEL_ID).trim(),
     modelVersion: process.env.INNEROS_FUNCTION_GEMMA_MODEL_VERSION || 'function-gemma-270m',
+  };
+}
+
+function vertexAuth(): { auth: GoogleAuth; source: string } {
+  // The production app already authenticates Firestore with this inline service
+  // account. Reuse the same credential for Vertex instead of assuming gcloud ADC
+  // exists on the AMD host.
+  const inlineServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
+  if (inlineServiceAccount) {
+    const credentials = JSON.parse(inlineServiceAccount) as Record<string, string>;
+    return {
+      auth: new GoogleAuth({ credentials, scopes: [CLOUD_PLATFORM_SCOPE] }),
+      source: 'FIREBASE_SERVICE_ACCOUNT_KEY',
+    };
+  }
+
+  return {
+    auth: new GoogleAuth({ scopes: [CLOUD_PLATFORM_SCOPE] }),
+    source: 'application_default_credentials',
   };
 }
 
@@ -41,6 +61,12 @@ function historicalProbe(
   };
 }
 
+type VertexAttempt = {
+  name: string;
+  url: string;
+  body: Record<string, unknown>;
+};
+
 export async function runFunctionGemmaProbe(
   correlationId: string,
   routing?: Record<string, unknown>
@@ -58,7 +84,7 @@ export async function runFunctionGemmaProbe(
   const startedAt = Date.now();
 
   try {
-    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    const { auth, source: authSource } = vertexAuth();
     const client = await auth.getClient();
     const tokenResponse = await client.getAccessToken();
     const accessToken = tokenResponse.token;
@@ -66,52 +92,104 @@ export async function runFunctionGemmaProbe(
       throw new Error('vertex_access_token_unavailable');
     }
 
-    const url = cfg.endpointDns
+    const prompt = `Classify this tool intent. Return JSON only: {"intent":"call_tool","route":"function_gemma"}. User request: open the weather tool for Guayaquil. Nonce: ${nonce}.`;
+    const basePredictUrl = cfg.endpointDns
       ? `https://${cfg.endpointDns}/v1/projects/${cfg.projectId}/locations/${cfg.region}/endpoints/${cfg.endpointId}:predict`
       : `https://${cfg.region}-aiplatform.googleapis.com/v1/projects/${cfg.projectId}/locations/${cfg.region}/endpoints/${cfg.endpointId}:predict`;
 
-    const prompt = `Classify this tool intent. Return JSON only: {"intent":"call_tool","route":"function_gemma"}. User request: open the weather tool for Guayaquil. Nonce: ${nonce}.`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+    // FunctionGemma/Model Garden serving has changed request surfaces over time.
+    // Try the current dedicated-endpoint OpenAI-compatible route first, then the
+    // documented Vertex chatCompletions request format, then the legacy prompt
+    // predict format. PASS is returned only after a real 2xx response.
+    const attempts: VertexAttempt[] = [];
+    if (cfg.endpointDns) {
+      attempts.push({
+        name: 'dedicated_chat_completions',
+        url: `https://${cfg.endpointDns}/v1beta1/projects/${cfg.projectId}/locations/${cfg.region}/endpoints/${cfg.endpointId}/chat/completions`,
+        body: {
+          model: '',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 64,
+          temperature: 0,
+        },
+      });
+    }
+    attempts.push(
+      {
+        name: 'vertex_predict_chat_completions',
+        url: basePredictUrl,
+        body: {
+          instances: [
+            {
+              '@requestFormat': 'chatCompletions',
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: 64,
+              temperature: 0,
+            },
+          ],
+        },
       },
-      body: JSON.stringify({
-        instances: [{ prompt, max_tokens: 64 }],
-      }),
-      signal: AbortSignal.timeout(45_000),
-    });
+      {
+        name: 'vertex_predict_generate_prompt',
+        url: basePredictUrl,
+        body: {
+          instances: [{ prompt, max_tokens: 64, temperature: 0 }],
+        },
+      }
+    );
 
-    const latency_ms = Date.now() - startedAt;
-    const raw = await response.text();
+    const failures: string[] = [];
+    for (const attempt of attempts) {
+      try {
+        const response = await fetch(attempt.url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(attempt.body),
+          signal: AbortSignal.timeout(20_000),
+        });
+        const raw = await response.text();
 
-    if (!response.ok) {
-      return {
-        ok: false,
-        correlation_id: correlationId,
-        status: 'FAIL',
-        live_mode: 'ERROR',
-        provider: 'Google Vertex AI',
-        model: 'FunctionGemma',
-        model_version: cfg.modelVersion,
-        runtime: 'vertex-model-garden-endpoint',
-        endpoint_id: cfg.endpointId,
-        deployed_model_id: cfg.deployedModelId,
-        endpoint_dns: cfg.endpointDns,
-        latency_ms,
-        nonce,
-        error: raw.slice(0, 480),
-        routing,
-      };
+        if (!response.ok) {
+          failures.push(`${attempt.name}: HTTP ${response.status} ${raw.slice(0, 220)}`);
+          continue;
+        }
+
+        return {
+          ok: true,
+          correlation_id: correlationId,
+          status: 'PASS',
+          live_mode: 'LIVE',
+          route_readiness: 'LIVE',
+          provider: 'Google Vertex AI',
+          model: 'FunctionGemma',
+          model_version: cfg.modelVersion,
+          runtime: 'vertex-model-garden-endpoint',
+          endpoint_id: cfg.endpointId,
+          deployed_model_id: cfg.deployedModelId,
+          endpoint_dns: cfg.endpointDns,
+          latency_ms: Date.now() - startedAt,
+          nonce,
+          response_preview: raw.slice(0, 320),
+          request_format: attempt.name,
+          auth_source: authSource,
+          message: 'Live FunctionGemma inference through Vertex Model Garden endpoint.',
+          routing,
+        };
+      } catch (attemptError) {
+        failures.push(
+          `${attempt.name}: ${attemptError instanceof Error ? attemptError.message : String(attemptError)}`
+        );
+      }
     }
 
     return {
-      ok: true,
+      ok: false,
       correlation_id: correlationId,
-      status: 'PASS',
-      live_mode: 'LIVE',
-      route_readiness: 'LIVE',
+      status: 'FAIL',
+      live_mode: 'ERROR',
       provider: 'Google Vertex AI',
       model: 'FunctionGemma',
       model_version: cfg.modelVersion,
@@ -119,13 +197,11 @@ export async function runFunctionGemmaProbe(
       endpoint_id: cfg.endpointId,
       deployed_model_id: cfg.deployedModelId,
       endpoint_dns: cfg.endpointDns,
-      latency_ms,
+      latency_ms: Date.now() - startedAt,
       nonce,
-      response_preview: raw.slice(0, 320),
-      request_format: 'vertex_predict_generate_prompt',
-      known_limitation:
-        'Model Garden chatCompletions sample returned HTTP 500 from the serving container; prompt generate format is live.',
-      message: 'Live FunctionGemma inference through Vertex Model Garden endpoint.',
+      auth_source: authSource,
+      error: failures.join(' | ').slice(0, 1400),
+      message: 'FunctionGemma endpoint was reached but no supported live inference route returned 2xx.',
       routing,
     };
   } catch (error) {
@@ -144,7 +220,7 @@ export async function runFunctionGemmaProbe(
       latency_ms: Date.now() - startedAt,
       nonce,
       error: error instanceof Error ? error.message : String(error),
-      message: 'Endpoint configured but live probe failed — no fake PASS.',
+      message: 'Endpoint configured but live probe failed before inference — no fake PASS.',
       routing,
     };
   }
