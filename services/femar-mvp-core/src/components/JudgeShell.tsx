@@ -140,8 +140,8 @@ export default function JudgeShell({ userName, onLogout, ariaSlot, traceSlot, ch
       {ariaSlot || traceSlot ? (
         <div className="border-b border-zinc-800 bg-zinc-950/90">
           <div className="mx-auto grid max-w-7xl gap-4 px-4 py-3 md:px-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch">
-            {ariaSlot ? <div className="min-h-[min(480px,52dvh)]">{ariaSlot}</div> : null}
-            {traceSlot ? <div className="min-h-[min(480px,52dvh)]">{traceSlot}</div> : null}
+            {ariaSlot ? <div className="h-[44dvh] min-h-[360px] max-h-[480px] overflow-hidden">{ariaSlot}</div> : null}
+            {traceSlot ? <div className="h-[44dvh] min-h-[360px] max-h-[480px] overflow-hidden">{traceSlot}</div> : null}
           </div>
         </div>
       ) : null}

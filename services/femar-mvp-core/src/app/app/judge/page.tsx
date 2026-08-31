@@ -387,7 +387,6 @@ export default function JudgeConsolePage() {
                   className={`group rounded-xl border bg-zinc-900/50 open:border-violet-500/30 ${
                     isActive ? 'border-violet-500/50 ring-1 ring-violet-500/30' : 'border-zinc-800'
                   }`}
-                  open={idx === 0}
                 >
                   <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3">
                     <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
@@ -416,7 +415,7 @@ export default function JudgeConsolePage() {
                       className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-[11px] text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
                     >
                       <Play className="h-3 w-3" />
-                      {isActive ? 'Running...' : 'Run this step only'}
+                      {isActive ? 'Running...' : `Run test ${idx + 1}`}
                     </button>
                   </summary>
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-3 text-xs text-zinc-400">
