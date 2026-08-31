@@ -44,6 +44,10 @@ function wantsHelp(lower: string): boolean {
   return /\b(what can you do|help|commands|comandos|qu[eé] puedes hacer)\b/.test(lower);
 }
 
+function isSimpleGreeting(lower: string): boolean {
+  return /^(hi|hello|hola|hol+a|hol[ñn]a|ola|hey|buenas|buenos|buen d[ií]a)[\s,!?.]*$/i.test(lower);
+}
+
 function parseRunTestIndex(lower: string): number | null {
   const m =
     lower.match(/\b(?:run|ejecuta|opcion|option|test)\s*(?:#|n[oº.]?\s*)?(\d)\b/) ||
@@ -53,29 +57,46 @@ function parseRunTestIndex(lower: string): number | null {
   return idx >= 1 && idx <= JUDGE_DEMO_STEPS.length ? idx - 1 : null;
 }
 
+function isBackendLeak(text: string): boolean {
+  return /(unauthorized|x-api-key|oauth bearer|mongo|mongodb|firestore|mcp|traceback|stack|failed_precondition|econnrefused|timed out|timeout|invalid_json|enotfound|error:)/i.test(
+    text
+  );
+}
+
+function isAnswerLeak(text: string): boolean {
+  return /(unauthorized|x-api-key|oauth bearer|traceback|stack|failed_precondition|econnrefused|timed out|timeout|invalid_json|enotfound|mongo(server)?error|firestore .*error|mcp .*error|error:)/i.test(
+    text
+  );
+}
+
+function safeBackendUnavailableText(lang: 'es' | 'en', correlation: string): string {
+  return lang === 'es'
+    ? `Estoy aquí contigo. En este momento una conexión interna no respondió bien, así que no voy a mostrarte detalles técnicos. Puedes seguir conversando o ejecutar una prueba del Judge; dejé la referencia ${correlation} para revisar la traza.`
+    : `I am here with you. An internal connection did not respond cleanly right now, so I will not expose technical details in the chat. You can keep talking or run a Judge test; I kept reference ${correlation} for the trace.`;
+}
+
+function naturalGreetingText(lang: 'es' | 'en'): string {
+  return lang === 'es'
+    ? '¡Hola! Soy ARIA. Estoy lista para conversar contigo, ayudarte a entender el demo o ejecutar una de las 7 pruebas del Judge cuando me lo pidas.'
+    : 'Hi! I am ARIA. I am ready to talk naturally, help you understand the demo, or run one of the 7 Judge tests when you ask.';
+}
+
 function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | 'en'): JudgeAriaReply {
   const correlation = String(res.correlation_id || cid);
   const answer = String(res.answer || res.text || res.message || '').trim();
   const status = String(res.status || '').toUpperCase();
-  const model = (res.model_result as { model?: string } | undefined)?.model;
-  const provider = (res.model_result as { provider?: string } | undefined)?.provider;
-  const runtime = (res.model_result as { runtime?: string } | undefined)?.runtime;
   const failureText = `${res.error || ''} ${answer}`.toLowerCase();
+  const leakedBackendError = isBackendLeak(String(res.error || '')) || isAnswerLeak(answer);
 
   let text = answer;
-  if (!text && res.ok === false) {
-    text = String(res.error || (lang === 'es' ? 'ARIA Judge no disponible.' : 'Judge ARIA unavailable.')).slice(0, 400);
+  if (leakedBackendError || res.ok === false) {
+    text = safeBackendUnavailableText(lang, correlation);
   }
   if (!text && res.ok !== false) {
     text =
       lang === 'es'
-        ? 'ARIA recibió la solicitud y el backend la aceptó, pero no devolvió texto final. Estado: PARTIAL. Revisa Global Live Trace con el correlation_id mostrado para ver el resultado real.'
-        : 'ARIA received the request and the backend accepted it, but no final answer text was returned. Status: PARTIAL. Check Global Live Trace with the correlation_id below for the real backend result.';
-  }
-  if (model || provider) {
-    text += `\n\n[${provider || 'local'} · ${model || runtime || 'model'} · …${correlation.slice(-10)}]`;
-  } else if (correlation) {
-    text += `\n\ncorrelation …${correlation.slice(-10)}`;
+        ? `Te escucho. La acción quedó registrada, pero no recibí una respuesta final clara. Puedes intentar de nuevo o ejecutar una prueba específica. Referencia: ${correlation}.`
+        : `I hear you. The action was recorded, but I did not receive a clear final answer. You can try again or run a specific test. Reference: ${correlation}.`;
   }
 
   const ok =
@@ -83,10 +104,11 @@ function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | '
     status !== 'FAIL' &&
     status !== 'ERROR' &&
     status !== 'UNAUTHORIZED' &&
+    !leakedBackendError &&
     !failureText.includes('unauthorized') &&
     Boolean(answer);
   const actionStatus =
-    status === 'PARTIAL' || !answer
+    status === 'PARTIAL' || !answer || leakedBackendError
       ? 'PARTIAL'
       : ok
         ? 'LIVE'
@@ -181,12 +203,15 @@ export async function handleJudgeAriaPrompt(
     };
   }
 
-  if (/^(hi|hello|hola|hey)[\s,!?.]*$/i.test(lower)) {
-    return invokeAskAria(
-      lang === 'es' ? 'Hola — ¿qué puedes hacer en Judge Mode?' : 'Hello — what can you do in Judge Mode?',
-      cid,
-      lang
-    );
+  if (isSimpleGreeting(lower)) {
+    return {
+      text: naturalGreetingText(lang),
+      source: 'judge_aria',
+      correlation_id: cid,
+      action: 'greeting',
+      ok: true,
+      actionStatus: 'LIVE',
+    };
   }
 
   // All conversational + guided test prompts → Codex real backend (judge_safe_trigger ask_aria)

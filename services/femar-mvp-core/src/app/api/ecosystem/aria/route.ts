@@ -207,17 +207,22 @@ Rules:
       console.error('ARIA: Gemini API key invalid or revoked — using local engine');
     }
 
-    const cookieStore = await cookies();
-    const userId = cookieStore.get('session_token')?.value;
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    let allowedModules = ECOSYSTEM_MODULES;
+    try {
+      const cookieStore = await cookies();
+      const userId = cookieStore.get('session_token')?.value;
+      if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.data();
+      const allowedIds = userData
+        ? resolveAllowedModuleIds(userData.companyId, userData.role, userData.modules)
+        : [];
+      allowedModules = ECOSYSTEM_MODULES.filter((m) => allowedIds.includes(m.id as (typeof allowedIds)[number]));
+    } catch (fallbackError) {
+      console.error('ARIA local fallback context error:', fallbackError);
     }
-    const userDoc = await db.collection('users').doc(userId).get();
-    const userData = userDoc.data();
-    const allowedIds = userData
-      ? resolveAllowedModuleIds(userData.companyId, userData.role, userData.modules)
-      : [];
-    const allowedModules = ECOSYSTEM_MODULES.filter((m) => allowedIds.includes(m.id as (typeof allowedIds)[number]));
 
     return respondLocal(String(effectivePrompt), replyLang, allowedModules, moduleId, {
       gemini_error: isGeminiAuthError(error) ? 'auth' : 'temporary',

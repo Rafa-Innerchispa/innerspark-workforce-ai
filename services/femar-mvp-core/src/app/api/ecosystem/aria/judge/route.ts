@@ -24,7 +24,23 @@ export async function POST(req: Request) {
       ? body.correlation_id.trim()
       : undefined;
 
-  const reply = await handleJudgeAriaPrompt(prompt, lang, correlationId);
+  let reply;
+  try {
+    reply = await handleJudgeAriaPrompt(prompt, lang, correlationId);
+  } catch (error) {
+    console.error('Judge ARIA backend error:', error);
+    const safeCorrelation = correlationId || `judge-aria-${Date.now()}`;
+    return NextResponse.json({
+      text:
+        lang === 'es'
+          ? `Estoy aquí contigo. Una conexión interna falló, pero no voy a mostrar detalles técnicos en el chat. Puedes intentar de nuevo o ejecutar una prueba del Judge. Referencia: ${safeCorrelation}.`
+          : `I am here with you. An internal connection failed, but I will not show technical details in the chat. You can try again or run a Judge test. Reference: ${safeCorrelation}.`,
+      source: 'judge_aria',
+      correlation_id: safeCorrelation,
+      action: { id: 'ask_aria', status: 'PARTIAL' },
+      ok: false,
+    });
+  }
 
   return NextResponse.json({
     text: reply.text,

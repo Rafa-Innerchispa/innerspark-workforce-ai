@@ -38,6 +38,11 @@ jest.mock('@/lib/judgeConsoleApi', () => ({
 }));
 
 describe('judgeAriaEngine', () => {
+  beforeEach(() => {
+    const { runJudgeMcpAction } = jest.requireMock('@/lib/judgeConsoleApi');
+    runJudgeMcpAction.mockClear();
+  });
+
   it('builds help catalog with seven steps', () => {
     const text = buildJudgeHelpCatalog('en');
     expect(text).toContain('Judge Mode');
@@ -56,8 +61,28 @@ describe('judgeAriaEngine', () => {
     const reply = await handleJudgeAriaPrompt('explain the A2A bridge in one sentence', 'en');
     expect(reply.action).toBe('ask_aria');
     expect(reply.text).toContain('Judge-aware reply');
+    expect(reply.text).not.toContain('local-intel-4');
+    expect(reply.text).not.toContain('phi3.5');
     expect(reply.text).not.toContain('Type help for modules');
     expect(reply.correlation_id).toBeTruthy();
+  });
+
+  it('answers simple greetings naturally without technical Judge boilerplate', async () => {
+    const { runJudgeMcpAction } = jest.requireMock('@/lib/judgeConsoleApi');
+    const before = runJudgeMcpAction.mock.calls.length;
+    const reply = await handleJudgeAriaPrompt('hola', 'es', 'cid-hola');
+    expect(reply.action).toBe('greeting');
+    expect(reply.actionStatus).toBe('LIVE');
+    expect(reply.text).toContain('¡Hola!');
+    expect(reply.text).not.toContain('MCP');
+    expect(reply.text).not.toContain('PASS simulado');
+    expect(runJudgeMcpAction.mock.calls.length).toBe(before);
+  });
+
+  it('normalizes typo greetings like holña', async () => {
+    const reply = await handleJudgeAriaPrompt('holña', 'es', 'cid-typo');
+    expect(reply.action).toBe('greeting');
+    expect(reply.text).toContain('ARIA');
   });
 
   it('turns an empty successful backend response into a truthful PARTIAL message', async () => {
@@ -67,11 +92,11 @@ describe('judgeAriaEngine', () => {
       correlation_id: 'cid-empty',
       status: 'OK',
     });
-    const reply = await handleJudgeAriaPrompt('hola', 'en', 'cid-empty');
+    const reply = await handleJudgeAriaPrompt('explain current status', 'en', 'cid-empty');
     expect(reply.action).toBe('ask_aria');
     expect(reply.ok).toBe(false);
     expect(reply.actionStatus).toBe('PARTIAL');
-    expect(reply.text).toContain('no final answer text');
+    expect(reply.text).toContain('clear final answer');
     expect(reply.text).toContain('cid-empty');
   });
 
@@ -83,10 +108,27 @@ describe('judgeAriaEngine', () => {
       status: 'OK',
       text: 'Unauthorized: valid X-API-Key or OAuth Bearer token required',
     });
-    const reply = await handleJudgeAriaPrompt('hola', 'en', 'cid-auth');
+    const reply = await handleJudgeAriaPrompt('explain the current backend', 'en', 'cid-auth');
     expect(reply.ok).toBe(false);
-    expect(reply.actionStatus).toBe('NOT_READY');
-    expect(reply.text).toContain('Unauthorized');
+    expect(reply.actionStatus).toBe('PARTIAL');
+    expect(reply.text).not.toContain('Unauthorized');
+    expect(reply.text).not.toContain('X-API-Key');
+    expect(reply.text).toContain('cid-auth');
+  });
+
+  it('shields Mongo and MCP backend errors from chat text', async () => {
+    const { runJudgeMcpAction } = jest.requireMock('@/lib/judgeConsoleApi');
+    runJudgeMcpAction.mockResolvedValueOnce({
+      ok: false,
+      correlation_id: 'cid-mongo',
+      error: 'MongoServerError: MCP invalid_json stack trace',
+    });
+    const reply = await handleJudgeAriaPrompt('tell me something useful', 'en', 'cid-mongo');
+    expect(reply.ok).toBe(false);
+    expect(reply.actionStatus).toBe('PARTIAL');
+    expect(reply.text).not.toContain('MongoServerError');
+    expect(reply.text).not.toContain('invalid_json');
+    expect(reply.text).toContain('cid-mongo');
   });
 
   it('runs guided test N via real MCP step action', async () => {
