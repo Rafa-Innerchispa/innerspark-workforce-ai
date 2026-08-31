@@ -16,10 +16,9 @@ describe('functionGemmaProbe', () => {
   });
 
   it('returns LIVE PASS when endpoint responds', async () => {
-    global.fetch = jest.fn(async () => ({
-      ok: true,
-      text: async () => '{"predictions":[{"content":"{\\"intent\\":\\"call_tool\\"}"}]}',
-    })) as typeof fetch;
+    global.fetch = jest.fn(async () =>
+      new Response('{"predictions":[{"content":"{\\"intent\\":\\"call_tool\\"}"}]}', { status: 200 })
+    ) as typeof fetch;
 
     const result = await runFunctionGemmaProbe('corr-live-test', { routes: [] });
     expect(result.ok).toBe(true);

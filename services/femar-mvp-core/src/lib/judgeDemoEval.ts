@@ -31,7 +31,7 @@ function stepOk(action: string, res: McpBridgeResult): { ok: boolean; detail: st
     const liveMode = String(res.live_mode || '');
     const status = String(res.status || res.state || res.route_state || res.gemma_route_state || 'not_running');
     const model = String(res.model || res.selected_model || res.model_id || 'FunctionGemma');
-    if (liveMode === 'LIVE' && res.ok !== false) {
+    if (liveMode === 'LIVE' && (res.ok ?? true)) {
       return {
         ok: true,
         detail: `LIVE · endpoint=${String(res.endpoint_id || '?').slice(-12)} · ${String(res.latency_ms ?? '?')}ms · ${String(res.response_preview || '').slice(0, 72)}`,
