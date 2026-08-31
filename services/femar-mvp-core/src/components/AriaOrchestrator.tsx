@@ -55,6 +55,7 @@ type JudgeAriaEvent = {
   correlationId?: string;
   action?: string;
   ok?: boolean;
+  apiResult?: Record<string, unknown>;
 };
 
 type AriaOrchestratorProps = {
@@ -195,7 +196,7 @@ export default function AriaOrchestrator({
   }, [lang, moduleId, userId, startNewChat]);
 
   useEffect(() => {
-    if (mode !== 'authenticated' || !userId) return;
+    if (mode !== 'authenticated' || !userId || moduleId === 'judge') return;
     fetch(`/api/ecosystem/aria/sessions?moduleId=${encodeURIComponent(moduleId)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -419,6 +420,7 @@ export default function AriaOrchestrator({
           correlationId: data.correlation_id,
           action: data.action?.id,
           ok: data.ok,
+          apiResult: data,
         });
       }
 
@@ -431,12 +433,12 @@ export default function AriaOrchestrator({
       const text =
         moduleId === 'judge'
           ? lang === 'es'
-            ? `Judge ARIA no pudo completar la llamada. Estado: ERROR. ${String(err).slice(0, 160)}`
-            : `Judge ARIA could not complete the live call. Status: ERROR. ${String(err).slice(0, 160)}`
+            ? 'No pude completar la acción en este momento. Puedes intentar de nuevo o usar un botón de prueba debajo.'
+            : 'I could not complete that action right now. Try again or use a test button below.'
           : copy.basicReply;
       setMessages((m) => [
         ...m.filter((msg) => msg.id !== runningMsgId),
-        { id: Date.now().toString(), role: 'aria', text, actionStatus: 'ERROR' },
+        { id: Date.now().toString(), role: 'aria', text, actionStatus: 'ERROR', provenance: 'LOCAL COMMAND' },
       ]);
     } finally {
       setLoading(false);

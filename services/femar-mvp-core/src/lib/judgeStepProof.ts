@@ -6,6 +6,8 @@ export type JudgeStepProof = {
   headline: string;
   status: 'PASS' | 'PARTIAL' | 'FAIL';
   summary: string;
+  whatHappened?: string;
+  whereToLook?: string;
   lines: string[];
   pdfUrl?: string;
   pdfFilename?: string;
@@ -27,16 +29,17 @@ function statusFromOk(ok: boolean, partial?: boolean): JudgeStepProof['status'] 
   return 'FAIL';
 }
 
-function agentNames(res: McpBridgeResult): string {
-  const cards = res.cards;
-  if (Array.isArray(cards)) {
-    return cards
-      .slice(0, 4)
-      .map((c) => String((c as { name?: string; agent_id?: string }).name || (c as { agent_id?: string }).agent_id || ''))
-      .filter(Boolean)
-      .join(', ');
-  }
-  return '';
+function agentCardNames(cards: unknown): string {
+  if (!Array.isArray(cards)) return '';
+  return cards
+    .slice(0, 6)
+    .map((c) => {
+      if (!c || typeof c !== 'object') return '';
+      const card = c as { name?: string; agent_id?: string; id?: string; title?: string };
+      return String(card.name || card.title || card.agent_id || card.id || '');
+    })
+    .filter(Boolean)
+    .join(', ');
 }
 
 export function buildStepProof(
@@ -82,15 +85,22 @@ export function buildStepProof(
     const state =
       (res.status as { state?: string } | undefined)?.state || String(res.state || 'unknown');
     const count = Number(res.agent_count ?? 0);
+    const names = agentCardNames(res.cards);
     const ok = state === 'online' && count > 0;
+    const traceLine = scopedTrace[0];
+    const connection = traceLine?.source && traceLine?.target ? `${traceLine.source} → ${traceLine.target}` : 'Judge Console → MCP → A2A controller';
     return {
       headline: 'Agents connected — A2A bridge online',
       status: statusFromOk(ok, state === 'online' && count === 0),
-      summary: `Bridge ${state}; ${count} agent cards registered.`,
+      whatHappened: `A2A bridge reported ${state} with ${count} registered agent cards.`,
+      summary: names ? `Sample agents: ${names}` : `Bridge ${state}; ${count} agents online.`,
+      whereToLook: 'Proof block + Global Live Trace (protocol a2a_status, correlation below).',
       lines: [
+        `Connection: ${connection}`,
+        `Protocol: a2a_status / a2a-inneros-1.0`,
         `A2A state: ${state}`,
         `Agent count: ${count}`,
-        agentNames(res) ? `Sample agents: ${agentNames(res)}` : '',
+        names ? `Agent names: ${names}` : '',
         correlationId ? `Correlation: ${correlationId}` : '',
       ].filter(Boolean),
       provider: 'InnerOS A2A',
@@ -130,16 +140,23 @@ export function buildStepProof(
     const excerpt = String(res.gemini_excerpt || res.text || '').slice(0, 280);
     const partial = res.gemini_fallback === true || res.status === 'PARTIAL';
     const ok = Boolean(pdfUrl) && res.ok !== false;
+    const generatedAt = timestamp;
     return {
       headline: 'Gemini emergency PDF — live generation',
       status: statusFromOk(ok, partial),
-      summary: excerpt || (ok ? 'PDF artifact generated from Gemini text.' : 'PDF generation incomplete.'),
+      whatHappened: partial
+        ? 'Emergency plan text was generated with local fallback; PDF artifact is still real and downloadable.'
+        : 'Gemini generated emergency plan text; backend converted it to a PDF artifact.',
+      summary: excerpt || (ok ? 'PDF artifact ready — use Open/Download below.' : 'PDF generation incomplete.'),
+      whereToLook: 'Gemini excerpt here, PDF buttons below, matching trace on the right.',
       excerpt,
       lines: [
         `Provider: ${String(res.provider || 'Google Gemini')}`,
         `Model: ${String(res.model || 'gemini')}`,
         res.nonce ? `Nonce: ${String(res.nonce)}` : '',
-        pdfUrl ? `Artifact: ${pdfUrl}` : 'No PDF URL returned',
+        `Generated: ${generatedAt}`,
+        `Content-Type: application/pdf`,
+        pdfUrl ? `Artifact URL: ${pdfUrl}` : 'No PDF URL returned',
         latencyMs != null ? `Latency: ${latencyMs} ms` : '',
       ].filter(Boolean),
       pdfUrl,
@@ -182,19 +199,34 @@ export function buildStepProof(
   }
 
   if (action === 'local_ai_proof') {
-    const answer = String(res.answer || res.text || res.response || res.output || '').slice(0, 400);
+    const answer = String(
+      res.answer || res.text || res.response || res.output || res.content || ''
+    ).slice(0, 400);
+    const route = res.route as Record<string, unknown> | undefined;
+    const routeSummary = route
+      ? String(route.selected_model || route.runtime || route.provider || route.recommendation || '')
+      : '';
+    const partial = !answer;
     const ok = res.ok !== false && Boolean(answer);
     return {
       headline: 'Local-first AMD — Qwen inference proof',
-      status: statusFromOk(ok, !answer),
-      summary: answer || 'Routing accepted; model output not returned yet.',
+      status: statusFromOk(ok, partial),
+      whatHappened: answer
+        ? 'Local model returned a bounded coding answer on the AMD path.'
+        : routeSummary
+          ? `Routing accepted (${routeSummary}) but no model output returned yet — PARTIAL.`
+          : 'Local routing invoked; awaiting model output — PARTIAL.',
+      summary: answer || 'No final model text in response (workflow/routing only).',
+      whereToLook: 'Model excerpt here + provider/runtime badges + Global Live Trace.',
       excerpt: answer || undefined,
       lines: [
-        `Provider: ${String(res.provider || res.provider_id || traceMeta?.provider || 'local')}`,
+        `Provider: ${String(res.provider || res.provider_id || traceMeta?.provider || 'local_amd')}`,
         `Model: ${String(res.model || res.selected_model || traceMeta?.model || 'Qwen3-Coder')}`,
-        `Runtime: ${String(res.runtime || traceMeta?.runtime || 'AMD .5')}`,
+        `Runtime: ${String(res.runtime || traceMeta?.runtime || 'vLLM / Ollama')}`,
         `Node: ${String(res.node || res.host || traceMeta?.node || '192.168.1.5')}`,
+        routeSummary ? `Route decision: ${routeSummary}` : '',
         latencyMs != null ? `Latency: ${latencyMs} ms` : '',
+        correlationId ? `Correlation: ${correlationId}` : '',
       ].filter(Boolean),
       provider: String(res.provider || traceMeta?.provider),
       model: String(res.model || traceMeta?.model),

@@ -259,8 +259,22 @@ async function executeJudgeMcpAction(
       return callMcpTool('judge_mi325x_deploy', { action: 'preflight', params: { dry_run: true, ...(payload.params as object) } });
     case 'trace_detail':
       return callMcpTool('judge_trace_detail', { run_id: String(payload.run_id || '') });
-    case 'a2a_handshake':
-      return callMcpTool('a2a_status', {});
+    case 'a2a_handshake': {
+      const [statusRes, cardsRes] = await Promise.all([
+        callMcpTool('a2a_status', {}),
+        callMcpTool('a2a_agent_cards', {}),
+      ]);
+      const cards = (cardsRes.cards as unknown[]) || (cardsRes.items as unknown[]) || [];
+      return {
+        ...statusRes,
+        ok: statusRes.ok !== false,
+        correlation_id: String(payload.correlation_id || statusRes.correlation_id || ''),
+        cards,
+        agent_count:
+          Number(statusRes.agent_count ?? 0) ||
+          (Array.isArray(cards) ? cards.length : 0),
+      };
+    }
     case 'a2a_cards':
       return callMcpTool('a2a_agent_cards', {});
     case 'a2a_dispatch':
@@ -280,16 +294,42 @@ async function executeJudgeMcpAction(
     }
     case 'local_ai_proof': {
       const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const message = String(
+      const prompt = String(
         payload.message ||
-          `Return one sentence confirming local-first routing on AMD. Nonce: ${nonce}`
+          `Return one short sentence confirming local-first routing on AMD with a coding tip. Nonce: ${nonce}`
       );
-      return callMcpTool('route_ai_task', {
-        message,
-        task_class: 'coding',
-        correlation_id: String(payload.correlation_id || ''),
-        prefer_local: true,
-      });
+      const correlationId = String(payload.correlation_id || `judge-local-ai-${Date.now()}`);
+      const [routeRes, modelRes] = await Promise.all([
+        callMcpTool('route_ai_task', {
+          title: 'Judge Test 6 — local AMD proof',
+          body: prompt,
+          task_type: 'coding',
+        }),
+        callMcpTool('run_local_model', {
+          task_type: 'coding',
+          prompt,
+        }),
+      ]);
+      const answer = String(
+        modelRes.answer ||
+          modelRes.text ||
+          modelRes.response ||
+          modelRes.output ||
+          modelRes.content ||
+          ''
+      ).trim();
+      return {
+        ok: modelRes.ok !== false && Boolean(answer),
+        correlation_id: correlationId,
+        answer,
+        route: routeRes,
+        provider: String(modelRes.provider || routeRes.provider || 'local_amd'),
+        model: String(modelRes.model || routeRes.selected_model || 'Qwen3-Coder'),
+        runtime: String(modelRes.runtime || routeRes.runtime || 'vLLM'),
+        node: String(modelRes.node || modelRes.host || '192.168.1.5'),
+        latency_ms: typeof modelRes.latency_ms === 'number' ? modelRes.latency_ms : undefined,
+        status: answer ? 'PASS' : 'PARTIAL',
+      };
     }
     case 'gemma_probe':
       {

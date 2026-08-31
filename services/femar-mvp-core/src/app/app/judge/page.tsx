@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
   Activity,
   CheckCircle2,
-  ChevronRight,
   Cloud,
   Cpu,
   Database,
@@ -21,11 +20,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import AriaOrchestrator from '@/components/AriaOrchestrator';
 import JudgeShell from '@/components/JudgeShell';
 import JudgeGlobalTracePanel from '@/components/JudgeGlobalTracePanel';
-import JudgeProofCard from '@/components/JudgeProofCard';
+import JudgeStepCard, { type JudgeStepRunState } from '@/components/JudgeStepCard';
 import type { JudgeContentSection, JudgeModelRoute, JudgeTraceEvent } from '@/lib/judgeConsoleApi';
 import { JUDGE_CLOUD_BURST_NOTE, JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
 import { evaluateJudgeDemoStep } from '@/lib/judgeDemoEval';
-import type { JudgeStepProof } from '@/lib/judgeStepProof';
 import { extractThisRunUsed } from '@/lib/judgeStepProof';
 import {
   inferRouteReadiness,
@@ -67,14 +65,7 @@ type JudgeApiPayload = {
   globalEvents?: JudgeTraceEvent[];
 };
 
-type StepRunState = {
-  id: string;
-  ok?: boolean;
-  detail?: string;
-  proof?: JudgeStepProof;
-  running?: boolean;
-  correlationId?: string;
-};
+type StepRunState = JudgeStepRunState & { detail?: string };
 
 function ReadinessPill({ state }: { state: RouteReadiness }) {
   return (
@@ -234,22 +225,7 @@ export default function JudgeConsolePage() {
       }))
     );
     const data = await runAction(step.action, { ...(step.payload || {}), correlation_id }, step.id);
-    const traceForEval = (data.trace_events as JudgeTraceEvent[] | undefined) || lastTraceRef.current;
-    const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step, traceForEval);
-    setStepStates((prev) =>
-      prev.map((s) =>
-        s.id === step.id
-          ? {
-              id: step.id,
-              ok: verdict.ok,
-              detail: verdict.detail,
-              proof: verdict.proof,
-              running: false,
-              correlationId: correlation_id,
-            }
-          : { ...s, running: false }
-      )
-    );
+    applyStepResult(stepIndex, data as Record<string, unknown>, correlation_id);
   };
 
   const runDemoSuite = async () => {
@@ -287,11 +263,40 @@ export default function JudgeConsolePage() {
     }
   };
 
-  const handleJudgeAriaEvent = (event: { correlationId?: string; action?: string; ok?: boolean }) => {
+  const applyStepResult = (stepIndex: number, data: Record<string, unknown>, correlationId: string) => {
+    const step = JUDGE_DEMO_STEPS[stepIndex];
+    const traceForEval = (data.trace_events as JudgeTraceEvent[] | undefined) || lastTraceRef.current;
+    const verdict = evaluateJudgeDemoStep(step.action, data as never, 'en', step, traceForEval);
+    setStepStates((prev) =>
+      prev.map((s) =>
+        s.id === step.id
+          ? {
+              id: step.id,
+              ok: verdict.ok,
+              detail: verdict.detail,
+              proof: verdict.proof,
+              running: false,
+              correlationId,
+            }
+          : s
+      )
+    );
+  };
+
+  const handleJudgeAriaEvent = (event: {
+    correlationId?: string;
+    action?: string;
+    ok?: boolean;
+    apiResult?: Record<string, unknown>;
+  }) => {
     if (event.correlationId) {
       setActiveCorrelationId(event.correlationId);
       setTraceFilter('current_run');
       pollTrace(event.correlationId);
+    }
+    const stepIndex = JUDGE_DEMO_STEPS.findIndex((step) => step.action === event.action);
+    if (stepIndex >= 0 && event.apiResult && event.correlationId) {
+      applyStepResult(stepIndex, event.apiResult, event.correlationId);
     }
     load();
   };
@@ -462,75 +467,22 @@ export default function JudgeConsolePage() {
             </div>
             {disabledReason ? <p className="max-w-sm text-xs text-amber-200">{disabledReason}</p> : null}
           </div>
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid items-stretch gap-3 xl:grid-cols-2">
             {JUDGE_DEMO_STEPS.map((step, idx) => {
               const state = stepStates.find((s) => s.id === step.id);
-              const isActive = state?.running || actionBusy === step.id;
               return (
-                <details
+                <JudgeStepCard
                   key={step.id}
-                  className={`group rounded-xl border bg-zinc-900/60 shadow-sm shadow-black/20 open:border-violet-500/40 ${
-                    isActive ? 'border-blue-500/50 ring-1 ring-blue-500/30' : 'border-zinc-800'
-                  }`}
-                  open={idx === 0}
-                >
-                  <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3">
-                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
-                    <span className="min-w-[220px] flex-1 text-sm font-medium text-white">{step.labelEn}</span>
-                    {state?.running ? (
-                      <StepStatusPill state="RUNNING" />
-                    ) : state?.ok === true ? (
-                      <StepStatusPill state="LIVE" />
-                    ) : state?.ok === false ? (
-                      <StepStatusPill state="NOT_READY" />
-                    ) : (
-                      <StepStatusPill state="READY" />
-                    )}
-                    <button
-                      type="button"
-                      disabled={
-                        (actionBusy !== null && actionBusy !== step.id) ||
-                        demoRunning ||
-                        !judgeActionsAvailable
-                      }
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        runSingleStep(idx);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-[11px] text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
-                    >
-                      <Play className="h-3 w-3" />
-                      {idx === 2 ? 'Verify evidence' : idx === 3 ? 'Generate PDF' : isActive ? 'Running...' : `Run test ${idx + 1}`}
-                    </button>
-                  </summary>
-                  <div className="border-t border-zinc-800 px-4 pb-4 pt-3 text-xs text-zinc-400">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">What this proves</p>
-                        <p className="mt-1 text-zinc-300">{step.purpose}</p>
-                      </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Why it matters</p>
-                        <p className="mt-1 text-zinc-300">{step.expectedFlow}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] md:grid-cols-3">
-                      <div><span className="text-zinc-500">Agents involved</span><br /><span className="text-zinc-300">{step.agent}</span></div>
-                      <div><span className="text-zinc-500">Protocol/tools</span><br /><span className="font-mono text-zinc-300">{step.protocol}</span></div>
-                      <div><span className="text-zinc-500">Expected live trace</span><br /><span className="font-mono text-zinc-300">{step.evidenceMongo}</span></div>
-                    </div>
-                    <p className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-100">
-                      <span className="font-semibold">PASS criteria:</span> {step.passCriteria}
-                    </p>
-                    {state?.proof ? <JudgeProofCard proof={state.proof} /> : null}
-                    {state?.correlationId ? (
-                      <p className="mt-2 break-all rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 font-mono text-[10px] text-violet-200">
-                        correlation_id: {state.correlationId}
-                      </p>
-                    ) : null}
-                  </div>
-                </details>
+                  step={step}
+                  idx={idx}
+                  state={state}
+                  disabled={
+                    (actionBusy !== null && actionBusy !== step.id) ||
+                    demoRunning ||
+                    !judgeActionsAvailable
+                  }
+                  onRun={() => runSingleStep(idx)}
+                />
               );
             })}
           </div>

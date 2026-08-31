@@ -20,6 +20,18 @@ export default function JudgeProofCard({ proof }: { proof: JudgeStepProof }) {
         <span className="rounded border border-current/30 px-2 py-0.5 text-[10px] font-bold">{proof.status}</span>
       </div>
       <p className="mt-2 text-[11px] leading-5 opacity-95">{proof.summary}</p>
+      {proof.whatHappened ? (
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/15 p-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide opacity-80">What happened</p>
+          <p className="mt-1 text-[11px] leading-5">{proof.whatHappened}</p>
+        </div>
+      ) : null}
+      {proof.whereToLook ? (
+        <p className="mt-2 text-[10px] text-zinc-300/90">
+          <span className="font-bold uppercase tracking-wide text-zinc-400">Where to look · </span>
+          {proof.whereToLook}
+        </p>
+      ) : null}
       {proof.excerpt ? (
         <blockquote className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2 text-[11px] italic leading-5">
           {proof.excerpt}
