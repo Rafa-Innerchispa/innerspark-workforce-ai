@@ -36,6 +36,7 @@ import {
   A2A_LIVE_PROOF_CORRELATION,
   defaultTraceFilter,
   findMi325xDroplet,
+  mergeTraceEvents,
   pickActiveCorrelationId,
   type TraceFilterId,
 } from '@/lib/judgeGlobalTrace';
@@ -178,6 +179,14 @@ export default function JudgeConsolePage() {
       const data = await res.json();
       setActionResult(JSON.stringify(data, null, 2).slice(0, 1400));
       const cid = String(data.correlation_id || data.event?.correlation_id || extra.correlation_id || '');
+      const immediateTrace = (data.trace_events as JudgeTraceEvent[] | undefined) || [];
+      if (immediateTrace.length) {
+        const merged = mergeTraceEvents(lastTraceRef.current, immediateTrace);
+        lastTraceRef.current = merged;
+        setTraceEvents(merged);
+        setTraceStale(false);
+        if (data.trace_sources) setTraceSources(data.trace_sources as string[]);
+      }
       if (cid) {
         setActiveCorrelationId(cid);
         setTraceFilter('current_run');

@@ -105,7 +105,7 @@ function isModel(ev: JudgeTraceEvent): boolean {
 
 function isTool(ev: JudgeTraceEvent): boolean {
   const p = String(ev.protocol || '').toLowerCase();
-  return Boolean(ev.tool) && (p.includes('mcp') || p.includes('tool') || p.includes('module'));
+  return Boolean(ev.tool) && (p.includes('mcp') || p.includes('tool') || p.includes('module') || p.includes('judge_test'));
 }
 
 function isCloud(ev: JudgeTraceEvent): boolean {
