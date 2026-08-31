@@ -131,6 +131,18 @@ describe('judgeAriaEngine', () => {
     expect(reply.text).toContain('cid-mongo');
   });
 
+  it('explains test N without executing MCP', async () => {
+    const { runJudgeMcpAction } = jest.requireMock('@/lib/judgeConsoleApi');
+    const before = runJudgeMcpAction.mock.calls.length;
+    const reply = await handleJudgeAriaPrompt('what does test 3 prove?', 'en');
+    expect(reply.action).toBe('explain_test');
+    expect(reply.ok).toBe(true);
+    expect(reply.text).toContain('Test 3');
+    expect(reply.text).toContain('PASS criteria');
+    expect(reply.text).not.toContain('PASS · Test 3');
+    expect(runJudgeMcpAction.mock.calls.length).toBe(before);
+  });
+
   it('runs guided test N via real MCP step action', async () => {
     const reply = await handleJudgeAriaPrompt('run test 1', 'en');
     expect(reply.action).toBe('safe_trigger');

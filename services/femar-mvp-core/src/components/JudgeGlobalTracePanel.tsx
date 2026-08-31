@@ -92,6 +92,13 @@ function TimelineEvent({ event, meta }: { event: JudgeTraceEvent; meta: TraceRun
   );
 }
 
+function currentRunSummary(group: TraceRunGroup): string {
+  const running = group.events.find((event) => String(event.status || '').toUpperCase() === 'RUNNING');
+  if (running) return humanEventLabel(running, group);
+  const latest = group.events[group.events.length - 1];
+  return latest ? humanEventLabel(latest, group) : 'Waiting for persisted trace events…';
+}
+
 function RunGroupCard({ group, defaultOpen }: { group: TraceRunGroup; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   const durationMs =
@@ -117,6 +124,9 @@ function RunGroupCard({ group, defaultOpen }: { group: TraceRunGroup; defaultOpe
             </span>
           </div>
           {group.purpose ? <p className="mt-1 text-[10px] leading-4 text-zinc-400">{group.purpose}</p> : null}
+          <p className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2 py-1.5 text-[10px] text-blue-100">
+            <span className="font-semibold">What is happening now:</span> {currentRunSummary(group)}
+          </p>
           <div className="mt-2 flex flex-wrap gap-3 text-[9px] text-zinc-500">
             <span>Started {formatTraceTime(group.startedAt)}</span>
             {durationMs != null ? <span>Duration {durationMs} ms</span> : null}

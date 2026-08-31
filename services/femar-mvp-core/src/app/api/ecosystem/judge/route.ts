@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadGlobalTraceEvents, loadJudgeConsoleSnapshot, runJudgeMcpAction } from '@/lib/judgeConsoleApi';
-import { loadJudgeTraceContractEvents } from '@/lib/judgeTraceContract';
+import { mergeTraceEvents } from '@/lib/judgeGlobalTrace';
 import { loadA2aProofBundle } from '@/lib/judgeA2aProofServer';
 import { requireJudgeConsoleAccess } from '@/lib/sessionAuth';
 
@@ -52,12 +52,9 @@ export async function POST(req: Request) {
   const result = await runJudgeMcpAction(action, body);
   const correlationId = String(result.correlation_id || body.correlation_id || '').trim();
   if (result.trace_persisted && correlationId) {
-    const [trace, contract] = await Promise.all([
-      loadGlobalTraceEvents({ correlationId, limit: 40 }),
-      loadJudgeTraceContractEvents({ correlationId, limit: 20 }),
-    ]);
-    (result as Record<string, unknown>).trace_events =
-      contract.events.length > 0 ? contract.events : trace.events.filter((e) => e.correlation_id === correlationId);
+    const trace = await loadGlobalTraceEvents({ correlationId, limit: 40 });
+    const scoped = trace.events.filter((event) => event.correlation_id === correlationId);
+    (result as Record<string, unknown>).trace_events = mergeTraceEvents(scoped);
     (result as Record<string, unknown>).trace_sources = trace.sources;
   }
   const status = result.ok === false && !SOFT_OK_ACTIONS.has(action) ? 502 : 200;

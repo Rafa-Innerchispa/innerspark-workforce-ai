@@ -44,6 +44,21 @@ function stepOk(action: string, res: McpBridgeResult): { ok: boolean; detail: st
   return { ok: true, detail: String(res.workflow_id || res.correlation_id || 'ok').slice(0, 80) };
 }
 
+export function formatJudgeStepVerdict(
+  step: JudgeDemoStep,
+  stepIndex: number,
+  verdict: { ok: boolean; detail: string },
+  lang: 'es' | 'en' = 'en'
+): string {
+  const title = step.labelEn.replace(/^\d+\s·\s*/, '');
+  const status = verdict.ok ? (lang === 'es' ? 'PASS' : 'PASS') : lang === 'es' ? 'PARTIAL/FAIL' : 'PARTIAL/FAIL';
+  const intro =
+    lang === 'es'
+      ? `Test ${stepIndex + 1} — ${title}: ${status}.`
+      : `Test ${stepIndex + 1} — ${title}: ${status}.`;
+  return `${intro}\nVerified: ${step.purpose}\nEvidence: ${verdict.detail}\nPASS rule: ${step.passCriteria}`;
+}
+
 export function evaluateJudgeDemoStep(
   action: string,
   res: McpBridgeResult,
@@ -51,11 +66,12 @@ export function evaluateJudgeDemoStep(
   step: JudgeDemoStep
 ): JudgeDemoStepResult {
   const verdict = stepOk(action, res);
+  const stepIndex = JUDGE_DEMO_STEPS.indexOf(step);
   return {
     id: step.id,
     label: step.labelEn,
     ok: verdict.ok,
-    detail: verdict.detail,
+    detail: formatJudgeStepVerdict(step, stepIndex >= 0 ? stepIndex : 0, verdict, lang),
   };
 }
 

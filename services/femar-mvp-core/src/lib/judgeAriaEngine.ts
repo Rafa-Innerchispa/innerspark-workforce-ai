@@ -47,11 +47,28 @@ function wantsHelp(lower: string): boolean {
 
 function parseRunTestIndex(lower: string): number | null {
   const m =
-    lower.match(/\b(?:run|ejecuta|opcion|option|test)\s*(?:#|n[oº.]?\s*)?(\d)\b/) ||
+    lower.match(/\b(?:run|ejecuta|ejecutar|start|lanza|launch)\s+(?:test|prueba|opci[oó]n|option)?\s*(?:#|n[oº.]?\s*)?(\d)\b/) ||
     lower.match(/\b(?:run test|ejecuta(?:r)?(?: la)? opci[oó]n)\s*(\d)\b/);
   if (!m) return null;
   const idx = Number(m[1]);
   return idx >= 1 && idx <= JUDGE_DEMO_STEPS.length ? idx - 1 : null;
+}
+
+function parseExplainTestIndex(lower: string): number | null {
+  const m = lower.match(
+    /\b(?:what does|explain|describe|tell me about|help with|qu[eé]\s+(?:demuestra|prueba|hace)|explica(?:r)?(?:me)?(?: la)?)\s+(?:test|prueba|opci[oó]n|proof)?\s*#?\s*(\d)\b/
+  );
+  if (!m) return null;
+  const idx = Number(m[1]);
+  return idx >= 1 && idx <= JUDGE_DEMO_STEPS.length ? idx - 1 : null;
+}
+
+function explainTestText(stepIndex: number, lang: 'es' | 'en'): string {
+  const step = JUDGE_DEMO_STEPS[stepIndex];
+  if (lang === 'es') {
+    return `Test ${stepIndex + 1}: ${step.labelEn.replace(/^\d+\s·\s*/, '')}\n\nQué demuestra: ${step.purpose}\n\nQué verás: ${step.expectedFlow}\n\nCriterio PASS: ${step.passCriteria}\n\nPara ejecutarlo di "run test ${stepIndex + 1}".`;
+  }
+  return `Test ${stepIndex + 1}: ${step.labelEn.replace(/^\d+\s·\s*/, '')}\n\nWhat it proves: ${step.purpose}\n\nWhat you will see: ${step.expectedFlow}\n\nPASS criteria: ${step.passCriteria}\n\nTo run it, say "run test ${stepIndex + 1}".`;
 }
 
 function isBackendLeak(text: string): boolean {
@@ -173,6 +190,18 @@ export async function handleJudgeAriaPrompt(
       source: 'judge_aria',
       correlation_id: cid,
       action: 'trace_help',
+      ok: true,
+      actionStatus: 'LIVE',
+    };
+  }
+
+  const explainIndex = parseExplainTestIndex(lower);
+  if (explainIndex !== null) {
+    return {
+      text: explainTestText(explainIndex, lang),
+      source: 'judge_aria',
+      correlation_id: cid,
+      action: 'explain_test',
       ok: true,
       actionStatus: 'LIVE',
     };

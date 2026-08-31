@@ -502,7 +502,9 @@ export default function JudgeConsolePage() {
                       <span className="font-semibold">PASS criteria:</span> {step.passCriteria}
                     </p>
                     {state?.detail ? (
-                      <p className="mt-2 font-mono text-[10px] text-zinc-500">Result: {state.detail}</p>
+                      <div className="mt-2 rounded-lg border border-zinc-700 bg-zinc-950/80 p-3 text-[11px] leading-5 text-zinc-200 whitespace-pre-wrap">
+                        {state.detail}
+                      </div>
                     ) : null}
                     {state?.correlationId ? (
                       <p className="mt-2 break-all rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 font-mono text-[10px] text-violet-200">

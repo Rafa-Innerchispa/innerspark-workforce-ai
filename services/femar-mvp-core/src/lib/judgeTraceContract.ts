@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { JudgeTraceEvent } from '@/lib/judgeConsoleApi';
+import { JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
 import type { McpBridgeResult } from '@/lib/ralfiaMcpBridge';
 
 const TRACE_SOURCE_COLLECTION = 'inneros_judge_trace_contract_events';
@@ -43,6 +44,17 @@ function targetForAction(action: string): string {
   if (action.includes('workflow')) return 'Judge workflow runtime';
   if (action.includes('safe_trigger')) return 'Ralphi MCP safe trigger';
   return 'InnerOS runtime';
+}
+
+function stepMetaForAction(action: string) {
+  const step = JUDGE_DEMO_STEPS.find((item) => item.action === action);
+  if (!step) return {};
+  const index = JUDGE_DEMO_STEPS.indexOf(step);
+  return {
+    test_number: index + 1,
+    test_title: step.labelEn.replace(/^\d+\s·\s*/, ''),
+    test_purpose: step.purpose,
+  };
 }
 
 function buildTraceEvent(input: {
@@ -94,7 +106,8 @@ function buildTraceEvent(input: {
       `${TRACE_SOURCE_COLLECTION}:${input.correlationId}:${input.action}`,
     artifact_id: textValue(result.artifact_id),
     error: input.error || textValue(result.error),
-  };
+    ...(stepMetaForAction(input.action) as Record<string, unknown>),
+  } as JudgeTraceEvent;
 }
 
 async function appendTraceEvent(event: JudgeTraceEvent): Promise<JudgeTraceContractWrite> {
