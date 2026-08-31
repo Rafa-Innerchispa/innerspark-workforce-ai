@@ -11,6 +11,21 @@ jest.mock('@/lib/judgeConsoleApi', () => ({
         model_result: { model: 'phi3.5:3.8b', provider: 'local-intel-4', runtime: 'local_model' },
       };
     }
+    if (action === 'safe_trigger') {
+      return {
+        ok: true,
+        correlation_id: payload.correlation_id || 'cid-step1',
+        status: 'OK',
+      };
+    }
+    if (action === 'a2a_handshake') {
+      return {
+        ok: true,
+        correlation_id: payload.correlation_id || 'cid-step1',
+        status: { state: 'online' },
+        agent_count: 58,
+      };
+    }
     if (action === 'demo_recording_suite') {
       return {
         ok: true,
@@ -29,8 +44,16 @@ describe('judgeAriaEngine', () => {
     expect(text.match(/\d\. /g)?.length).toBeGreaterThanOrEqual(7);
   });
 
-  it('routes conversational prompts through ask_aria backend', async () => {
+  it('returns local help catalog without MCP', async () => {
     const reply = await handleJudgeAriaPrompt('what can you do here?', 'en');
+    expect(reply.action).toBe('help_catalog');
+    expect(reply.actionStatus).toBe('LIVE');
+    expect(reply.text).toContain('Judge Mode');
+    expect(reply.text).not.toContain('Type help for modules');
+  });
+
+  it('routes conversational prompts through ask_aria backend', async () => {
+    const reply = await handleJudgeAriaPrompt('explain the A2A bridge in one sentence', 'en');
     expect(reply.action).toBe('ask_aria');
     expect(reply.text).toContain('Judge-aware reply');
     expect(reply.text).not.toContain('Type help for modules');
@@ -66,10 +89,11 @@ describe('judgeAriaEngine', () => {
     expect(reply.text).toContain('Unauthorized');
   });
 
-  it('routes run test 1 through ask_aria per Codex contract', async () => {
+  it('runs guided test N via real MCP step action', async () => {
     const reply = await handleJudgeAriaPrompt('run test 1', 'en');
-    expect(reply.action).toBe('ask_aria');
-    expect(reply.text).toContain('run test 1');
+    expect(reply.action).toBe('safe_trigger');
+    expect(reply.text).toContain('Test 1');
+    expect(reply.correlation_id).toBeTruthy();
   });
 
   it('runs full demo suite separately', async () => {

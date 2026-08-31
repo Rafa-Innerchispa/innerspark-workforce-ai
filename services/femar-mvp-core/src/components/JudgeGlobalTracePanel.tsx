@@ -15,6 +15,7 @@ type JudgeGlobalTracePanelProps = {
   activeCorrelationId: string | null;
   sources: string[];
   loading?: boolean;
+  stale?: boolean;
   onFilterChange: (filter: TraceFilterId) => void;
   onCorrelationChange: (id: string) => void;
 };
@@ -66,6 +67,7 @@ export default function JudgeGlobalTracePanel({
   activeCorrelationId,
   sources,
   loading,
+  stale,
   onFilterChange,
   onCorrelationChange,
 }: JudgeGlobalTracePanelProps) {
@@ -73,12 +75,13 @@ export default function JudgeGlobalTracePanel({
   const fields = traceFieldMatrix(filtered);
 
   return (
-    <section className="sticky top-0 z-30 rounded-xl border border-emerald-500/30 bg-zinc-950/95 shadow-lg shadow-black/40 backdrop-blur">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-emerald-500/30 bg-zinc-950/95 shadow-lg shadow-black/40 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
         <div>
           <h2 className="text-sm font-semibold text-white">Global Live Trace</h2>
           <p className="text-[10px] text-zinc-500">
             Persisted backend records only · judge_trace + A2A/ops activity · auto-poll 4s
+            {stale ? ' · showing last good snapshot (reconnecting)' : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -108,7 +111,7 @@ export default function JudgeGlobalTracePanel({
         />
         <span>{filtered.length}/{events.length} events · MCP sources: {sources.join(', ') || '—'} · fields: {fields.slice(0, 8).join(', ')}</span>
       </div>
-      <div className="max-h-[280px] overflow-auto overflow-x-auto">
+      <div className="min-h-0 flex-1 overflow-auto overflow-x-auto">
         <table className="w-full min-w-[1500px] text-left">
           <thead className="sticky top-0 bg-zinc-900/95 text-[10px] uppercase text-zinc-500">
             <tr>

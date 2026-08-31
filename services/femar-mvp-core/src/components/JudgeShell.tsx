@@ -15,11 +15,12 @@ type JudgeShellProps = {
   userName: string;
   onLogout: () => void;
   ariaSlot?: React.ReactNode;
+  traceSlot?: React.ReactNode;
   children: React.ReactNode;
 };
 
 /** Minimal English-only shell for hackathon judges — no tenant modules nav. */
-export default function JudgeShell({ userName, onLogout, ariaSlot, children }: JudgeShellProps) {
+export default function JudgeShell({ userName, onLogout, ariaSlot, traceSlot, children }: JudgeShellProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -136,12 +137,15 @@ export default function JudgeShell({ userName, onLogout, ariaSlot, children }: J
         </div>
       ) : null}
 
-      {ariaSlot ? (
+      {ariaSlot || traceSlot ? (
         <div className="border-b border-zinc-800 bg-zinc-950/90">
-          <div className="mx-auto max-w-5xl px-4 py-3 md:px-8">{ariaSlot}</div>
+          <div className="mx-auto grid max-w-7xl gap-4 px-4 py-3 md:px-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch">
+            {ariaSlot ? <div className="min-h-[min(480px,52dvh)]">{ariaSlot}</div> : null}
+            {traceSlot ? <div className="min-h-[min(480px,52dvh)]">{traceSlot}</div> : null}
+          </div>
         </div>
       ) : null}
-      <main className="mx-auto w-full max-w-5xl flex-1">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 md:px-8">{children}</main>
     </div>
   );
 }

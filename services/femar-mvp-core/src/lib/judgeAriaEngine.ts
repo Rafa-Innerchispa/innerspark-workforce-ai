@@ -1,4 +1,5 @@
 import { JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
+import { evaluateJudgeDemoStep } from '@/lib/judgeDemoEval';
 import { runJudgeMcpAction } from '@/lib/judgeConsoleApi';
 import type { McpBridgeResult } from '@/lib/ralfiaMcpBridge';
 
@@ -37,6 +38,19 @@ function wantsAllTests(lower: string): boolean {
 
 function wantsTraceHelp(lower: string): boolean {
   return /\b(trace|telemetry|live trace|global trace)\b/.test(lower);
+}
+
+function wantsHelp(lower: string): boolean {
+  return /\b(what can you do|help|commands|comandos|qu[eé] puedes hacer)\b/.test(lower);
+}
+
+function parseRunTestIndex(lower: string): number | null {
+  const m =
+    lower.match(/\b(?:run|ejecuta|opcion|option|test)\s*(?:#|n[oº.]?\s*)?(\d)\b/) ||
+    lower.match(/\b(?:run test|ejecuta(?:r)?(?: la)? opci[oó]n)\s*(\d)\b/);
+  if (!m) return null;
+  const idx = Number(m[1]);
+  return idx >= 1 && idx <= JUDGE_DEMO_STEPS.length ? idx - 1 : null;
 }
 
 function normalizeAskAriaReply(res: McpBridgeResult, cid: string, lang: 'es' | 'en'): JudgeAriaReply {
@@ -126,13 +140,44 @@ export async function handleJudgeAriaPrompt(
     };
   }
 
+  if (wantsHelp(lower)) {
+    return {
+      text: buildJudgeHelpCatalog(lang),
+      source: 'judge_aria',
+      correlation_id: cid,
+      action: 'help_catalog',
+      ok: true,
+      actionStatus: 'LIVE',
+    };
+  }
+
   if (wantsTraceHelp(lower)) {
     return {
       text:
         lang === 'es'
-          ? 'Global Live Trace está arriba (poll 4s). Ejecuta un test y filtra por correlation_id.'
-          : 'Global Live Trace is sticky above (4s poll). Run any test and filter by correlation_id.',
+          ? 'Global Live Trace está a la derecha (poll 4s). Ejecuta un test y filtra por correlation_id.'
+          : 'Global Live Trace is on the right (4s poll). Run any test and filter by correlation_id.',
       source: 'judge_aria',
+      correlation_id: cid,
+      action: 'trace_help',
+      ok: true,
+      actionStatus: 'LIVE',
+    };
+  }
+
+  const stepIndex = parseRunTestIndex(lower);
+  if (stepIndex !== null) {
+    const step = JUDGE_DEMO_STEPS[stepIndex];
+    const stepCid = `${cid}-${step.id}`;
+    const res = await runJudgeMcpAction(step.action, { ...(step.payload || {}), correlation_id: stepCid });
+    const verdict = evaluateJudgeDemoStep(step.action, res, lang, step);
+    return {
+      text: `${verdict.ok ? 'PASS' : 'PARTIAL'} · Test ${stepIndex + 1}: ${step.labelEn}\n${verdict.detail || '—'}\ncorrelation_id: ${String(res.correlation_id || stepCid)}`,
+      source: 'judge_aria',
+      correlation_id: String(res.correlation_id || stepCid),
+      action: step.action,
+      ok: verdict.ok,
+      actionStatus: verdict.ok ? 'LIVE' : 'PARTIAL',
     };
   }
 

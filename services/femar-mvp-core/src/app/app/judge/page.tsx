@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity,
@@ -17,7 +17,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import AriaOrchestrator from '@/components/AriaOrchestrator';
 import JudgeShell from '@/components/JudgeShell';
 import JudgeGlobalTracePanel from '@/components/JudgeGlobalTracePanel';
-import JudgeA2aProofPanel from '@/components/JudgeA2aProofPanel';
 import type { JudgeContentSection, JudgeModelRoute, JudgeTraceEvent } from '@/lib/judgeConsoleApi';
 import { JUDGE_CLOUD_BURST_NOTE, JUDGE_DEMO_STEPS } from '@/lib/judgeDemoSteps';
 import { evaluateJudgeDemoStep } from '@/lib/judgeDemoEval';
@@ -75,6 +74,21 @@ function ReadinessPill({ state }: { state: RouteReadiness }) {
   );
 }
 
+function StepStatusPill({ state }: { state: 'READY' | 'RUNNING' | RouteReadiness }) {
+  const classes =
+    state === 'READY'
+      ? 'border-zinc-700 bg-zinc-800/70 text-zinc-300'
+      : state === 'RUNNING'
+        ? 'border-blue-500/40 bg-blue-500/15 text-blue-200'
+        : readinessBadgeClass(state);
+  return <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${classes}`}>{state}</span>;
+}
+
+function freshStepCorrelation(stepId: string) {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `judge-ui-trace-final-20260831-${stepId}-${Date.now()}-${suffix}`;
+}
+
 export default function JudgeConsolePage() {
   const { user, logout, isLoading } = useAuth();
   const router = useRouter();
@@ -90,6 +104,9 @@ export default function JudgeConsolePage() {
   const [traceEvents, setTraceEvents] = useState<JudgeTraceEvent[]>([]);
   const [traceSources, setTraceSources] = useState<string[]>([]);
   const [traceLoading, setTraceLoading] = useState(false);
+  const [traceStale, setTraceStale] = useState(false);
+  const lastTraceRef = useRef<JudgeTraceEvent[]>([]);
+  const [legacyHostWarning, setLegacyHostWarning] = useState(false);
 
   const pollTrace = (correlationId?: string) => {
     setTraceLoading(true);
@@ -99,12 +116,24 @@ export default function JudgeConsolePage() {
       .then((r) => r.json())
       .then((d) => {
         const events = (d.events as JudgeTraceEvent[]) || [];
-        setTraceEvents(events);
+        if (events.length) {
+          lastTraceRef.current = events;
+          setTraceEvents(events);
+          setTraceStale(false);
+        } else if (lastTraceRef.current.length) {
+          setTraceEvents(lastTraceRef.current);
+          setTraceStale(true);
+        }
         setTraceSources((d.sources as string[]) || []);
-        const active = pickActiveCorrelationId(events, activeCorrelationId || correlationId);
+        const active = pickActiveCorrelationId(events.length ? events : lastTraceRef.current, activeCorrelationId || correlationId);
         if (active && !activeCorrelationId) setActiveCorrelationId(active);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (lastTraceRef.current.length) {
+          setTraceEvents(lastTraceRef.current);
+          setTraceStale(true);
+        }
+      })
       .finally(() => setTraceLoading(false));
   };
 
@@ -152,6 +181,7 @@ export default function JudgeConsolePage() {
 
   const runSingleStep = async (stepIndex: number) => {
     const step = JUDGE_DEMO_STEPS[stepIndex];
+    const correlation_id = freshStepCorrelation(step.id);
     setStepStates(
       JUDGE_DEMO_STEPS.map((s) => ({
         id: s.id,
@@ -160,7 +190,7 @@ export default function JudgeConsolePage() {
         detail: stepStates.find((x) => x.id === s.id)?.detail,
       }))
     );
-    const data = await runAction(step.action, step.payload || {}, step.id);
+    const data = await runAction(step.action, { ...(step.payload || {}), correlation_id }, step.id);
     const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step);
     setStepStates((prev) =>
       prev.map((s) =>
@@ -178,7 +208,11 @@ export default function JudgeConsolePage() {
         setStepStates((prev) =>
           prev.map((s) => (s.id === step.id ? { ...s, running: true } : s))
         );
-        const data = await runAction(step.action, step.payload || {}, step.id);
+        const data = await runAction(
+          step.action,
+          { ...(step.payload || {}), correlation_id: freshStepCorrelation(step.id) },
+          step.id
+        );
         const verdict = evaluateJudgeDemoStep(step.action, data, 'en', step);
         collected.push({ id: step.id, ok: verdict.ok, detail: verdict.detail });
         setStepStates([...collected]);
@@ -201,8 +235,10 @@ export default function JudgeConsolePage() {
   };
 
   useEffect(() => {
-    if (!isLoading && !user) router.push('/app/login?judge=1');
-  }, [user, isLoading, router]);
+    if (typeof window !== 'undefined') {
+      setLegacyHostWarning(window.location.hostname.includes('pcdoctor.ai'));
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -212,6 +248,10 @@ export default function JudgeConsolePage() {
       return () => window.clearInterval(id);
     }
   }, [user, activeCorrelationId]);
+
+  useEffect(() => {
+    if (!isLoading && !user) router.push('/app/login?judge=1');
+  }, [user, isLoading, router]);
 
   const routes = useMemo(
     () => (snapshot?.modelRouting?.routes as JudgeModelRoute[] | undefined) || [],
@@ -229,6 +269,28 @@ export default function JudgeConsolePage() {
   const effectiveFilter = traceFilter === 'current_run' && !activeCorrelationId ? 'all' : traceFilter;
   const a2aOnline = snapshot?.backend === 'live';
   const kpis = snapshot?.kpis || { total: 0, verified: 0, passRate: 0, local: 0, cloud: 0 };
+
+  const tracePanel = (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500">
+        <span>LIVE trace only: persisted MCP/A2A/RACB events</span>
+        {traceStale ? <span className="text-amber-300">showing last good trace while reconnecting</span> : null}
+      </div>
+      <JudgeGlobalTracePanel
+        events={displayEvents}
+        filter={effectiveFilter}
+        activeCorrelationId={activeCorrelationId || null}
+        sources={traceSources.length ? traceSources : snapshot?.traceSources || []}
+        loading={traceLoading || loading}
+        stale={traceStale}
+        onFilterChange={(f) => setTraceFilter(f)}
+        onCorrelationChange={(id) => {
+          setActiveCorrelationId(id);
+          if (id) setTraceFilter(defaultTraceFilter(id));
+        }}
+      />
+    </div>
+  );
 
   if (isLoading || !user) {
     return (
@@ -255,32 +317,18 @@ export default function JudgeConsolePage() {
           onJudgeEvent={handleJudgeAriaEvent}
         />
       }
+      traceSlot={tracePanel}
     >
-      <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-4 text-left md:px-8 md:py-5">
-        <JudgeGlobalTracePanel
-          events={displayEvents}
-          filter={effectiveFilter}
-          activeCorrelationId={activeCorrelationId || null}
-          sources={traceSources.length ? traceSources : snapshot?.traceSources || []}
-          loading={traceLoading || loading}
-          onFilterChange={(f) => setTraceFilter(f)}
-          onCorrelationChange={(id) => {
-            setActiveCorrelationId(id);
-            if (id) setTraceFilter(defaultTraceFilter(id));
-          }}
-        />
-        <JudgeA2aProofPanel
-          events={displayEvents}
-          loading={traceLoading}
-          onLoadProof={(bundle) => {
-            setTraceEvents(bundle.traceEvents);
-            setTraceSources(bundle.traceSources);
-          }}
-          onFocusCorrelation={(id) => {
-            setActiveCorrelationId(id);
-            setTraceFilter('a2a_proof');
-          }}
-        />
+      <div className="mx-auto w-full space-y-5 py-4 text-left md:py-5">
+        {legacyHostWarning ? (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Legacy host <span className="font-mono">inneros.pcdoctor.ai</span> may point to Cloud Run shell, not this AMD Judge build.
+            Canonical jury URL:{' '}
+            <a href="https://inneros.creatorcore.ai/app/judge" className="font-mono text-emerald-300 underline">
+              inneros.creatorcore.ai/app/judge
+            </a>
+          </div>
+        ) : null}
         {/* Status + refresh */}
         <div className="grid items-end gap-3 text-center md:grid-cols-[1fr_auto] md:text-left">
           <div className="mx-auto max-w-2xl md:mx-0">
@@ -341,16 +389,35 @@ export default function JudgeConsolePage() {
                   }`}
                   open={idx === 0}
                 >
-                  <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3">
+                  <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-3">
                     <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-90" />
-                    <span className="flex-1 text-sm font-medium text-white">{step.labelEn}</span>
+                    <span className="min-w-[220px] flex-1 text-sm font-medium text-white">{step.labelEn}</span>
                     {state?.running ? (
-                      <span className="text-[10px] text-zinc-400">running…</span>
+                      <StepStatusPill state="RUNNING" />
                     ) : state?.ok === true ? (
-                      <ReadinessPill state="LIVE" />
+                      <StepStatusPill state="LIVE" />
                     ) : state?.ok === false ? (
-                      <ReadinessPill state="NOT_READY" />
-                    ) : null}
+                      <StepStatusPill state="NOT_READY" />
+                    ) : (
+                      <StepStatusPill state="READY" />
+                    )}
+                    <button
+                      type="button"
+                      disabled={
+                        (actionBusy !== null && actionBusy !== step.id) ||
+                        demoRunning ||
+                        snapshot?.backend !== 'live'
+                      }
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        runSingleStep(idx);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-[11px] text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
+                    >
+                      <Play className="h-3 w-3" />
+                      {isActive ? 'Running...' : 'Run this step only'}
+                    </button>
                   </summary>
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-3 text-xs text-zinc-400">
                     <p className="text-[10px] text-zinc-500">
@@ -364,19 +431,6 @@ export default function JudgeConsolePage() {
                     {state?.detail ? (
                       <p className="mt-2 font-mono text-[10px] text-zinc-500">Result: {state.detail}</p>
                     ) : null}
-                    <button
-                      type="button"
-                      disabled={
-                        (actionBusy !== null && actionBusy !== step.id) ||
-                        demoRunning ||
-                        snapshot?.backend !== 'live'
-                      }
-                      onClick={() => runSingleStep(idx)}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-[11px] text-violet-100 hover:bg-violet-500/20 disabled:opacity-40"
-                    >
-                      <Play className="h-3 w-3" />
-                      {isActive ? 'Running…' : 'Run this step only'}
-                    </button>
                   </div>
                 </details>
               );

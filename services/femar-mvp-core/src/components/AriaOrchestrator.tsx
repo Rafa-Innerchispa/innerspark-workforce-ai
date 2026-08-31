@@ -431,7 +431,7 @@ export default function AriaOrchestrator({
 
   const shellClass = panel
     ? `flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950/40 ${
-        moduleId === 'judge' ? 'h-[min(420px,42dvh)] max-h-[420px]' : 'h-full'
+        moduleId === 'judge' ? 'h-full min-h-0' : 'h-full'
       }`
     : 'flex w-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 backdrop-blur-xl';
 
@@ -610,8 +610,20 @@ export default function AriaOrchestrator({
                   <Volume2 className="h-3.5 w-3.5" />
                 </button>
               ) : null}
-              {m.actionStatus && m.actionStatus !== 'LIVE' ? (
-                <span className="mt-1 block text-[10px] uppercase tracking-wide text-amber-400">{m.actionStatus}</span>
+              {m.actionStatus ? (
+                <span
+                  className={`mt-1 block text-[10px] uppercase tracking-wide ${
+                    m.actionStatus === 'LIVE'
+                      ? 'text-emerald-400'
+                      : m.actionStatus === 'RUNNING'
+                        ? 'text-blue-300'
+                        : m.actionStatus === 'ERROR' || m.actionStatus === 'NOT_READY'
+                          ? 'text-red-400'
+                          : 'text-amber-400'
+                  }`}
+                >
+                  {m.actionStatus}
+                </span>
               ) : null}
               {m.navigate ? (
                 <a href={m.navigate.url} className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-400">
