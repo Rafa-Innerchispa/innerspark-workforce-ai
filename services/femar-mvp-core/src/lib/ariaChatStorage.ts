@@ -32,6 +32,14 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 export function loadLocalAriaSessions(moduleId: string, userId?: string): LocalAriaSession[] {
   if (typeof window === 'undefined') return [];
   const key = storageKey(moduleId, userId);
+
+  // Judge mode is intentionally ephemeral: every fresh page load starts from a
+  // clean ARIA conversation so stale demo errors/history cannot confuse judges.
+  if (moduleId === 'judge') {
+    localStorage.removeItem(key);
+    return [];
+  }
+
   return safeParse<LocalAriaSession[]>(localStorage.getItem(key), []);
 }
 
@@ -42,6 +50,10 @@ export function saveLocalAriaSession(
   maxSessions = 20
 ): void {
   if (typeof window === 'undefined') return;
+
+  // Judge chat is a recording/demo surface, not a durable inbox.
+  if (moduleId === 'judge') return;
+
   const key = storageKey(moduleId, userId);
   const list = loadLocalAriaSessions(moduleId, userId).filter((s) => s.id !== session.id);
   list.unshift(session);
