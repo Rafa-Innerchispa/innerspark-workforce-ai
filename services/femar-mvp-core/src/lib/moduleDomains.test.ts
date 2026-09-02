@@ -1,4 +1,4 @@
-import { MODULE_PUBLIC_URLS, MODULE_SUBDOMAINS, modulePublicUrl } from '@/lib/moduleDomains';
+import { MODULE_PUBLIC_URLS, MODULE_SUBDOMAINS, modulePublicUrl, moduleLandingPathForHost, moduleLandingPathForId } from '@/lib/moduleDomains';
 
 describe('moduleDomains', () => {
   it('uses creatorcore.ai for all module subdomains', () => {
@@ -14,5 +14,12 @@ describe('moduleDomains', () => {
     expect(modulePublicUrl(MODULE_SUBDOMAINS.portal, '/app/login')).toBe(
       'https://inneros.creatorcore.ai/app/login',
     );
+  });
+
+  it('maps module hosts to real landing routes instead of login', () => {
+    expect(moduleLandingPathForHost('workforce.creatorcore.ai')).toBe('/modules');
+    expect(moduleLandingPathForHost('iskcon.creatorcore.ai')).toBe('/app/desk');
+    expect(moduleLandingPathForHost('inneros.creatorcore.ai')).toBe('/app/modules');
+    expect(moduleLandingPathForId('quoteops')).toBeNull();
   });
 });

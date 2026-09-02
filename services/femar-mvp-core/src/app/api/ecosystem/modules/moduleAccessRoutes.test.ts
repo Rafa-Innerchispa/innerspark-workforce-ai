@@ -98,7 +98,7 @@ describe('ecosystem module API RBAC', () => {
   });
 
   describe('GET /api/ecosystem/modules/[moduleId]/access', () => {
-    it('pcdoctor admin granted quoteops access', async () => {
+    it('pcdoctor admin cannot launch a module whose UI is not ready', async () => {
       mockRequireModuleAccess.mockResolvedValue(sessionFor('pcdoctor', 'admin'));
 
       const res = await moduleAccess(new Request('http://localhost/access'), {
@@ -106,10 +106,10 @@ describe('ecosystem module API RBAC', () => {
       });
       const data = await res.json();
 
-      expect(res.status).toBe(200);
-      expect(data.ok).toBe(true);
-      expect(data.allowed).toBe(true);
-      expect(data.moduleId).toBe('quoteops');
+      expect(res.status).toBe(409);
+      expect(data.ok).toBe(false);
+      expect(data.error).toMatch(/not ready/i);
+      expect(mockRequireModuleAccess).toHaveBeenCalledWith('quoteops');
     });
 
     it('femar forced quoteops access returns 403', async () => {
@@ -137,6 +137,19 @@ describe('ecosystem module API RBAC', () => {
       });
 
       expect(res.status).toBe(403);
+    });
+
+    it('workforce launch URL redirects to a real route', async () => {
+      mockRequireModuleAccess.mockResolvedValue(sessionFor('femar', 'employee'));
+
+      const res = await moduleAccess(new Request('https://inneros.creatorcore.ai/access', { headers: { host: 'inneros.creatorcore.ai' } }), {
+        params: Promise.resolve({ moduleId: 'workforce-ai' }),
+      });
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.launchUrl).toContain('redirect=%2Fmodules');
+      expect(data.launchUrl).toContain('workforce.creatorcore.ai');
     });
 
     it('femar may access workforce-ai', async () => {

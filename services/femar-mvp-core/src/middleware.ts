@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { INNEROS_APP_HOSTS, ISKCON_HOSTS, MODULE_HOST_ALIASES } from '@/lib/publicDomains';
+import { INNEROS_APP_HOSTS, ISKCON_HOSTS, MODULE_HOST_ALIASES, moduleLandingPathForHost } from '@/lib/publicDomains';
 
 export function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
@@ -43,8 +43,11 @@ export function middleware(request: NextRequest) {
       return res;
     }
     if (path === '/' || path === '/login' || path === '/register') {
-      if (ISKCON_HOSTS.has(host) && path === '/') {
-        url.pathname = '/app/desk';
+      const moduleLanding = path === '/' ? moduleLandingPathForHost(host) : null;
+      if (moduleLanding) {
+        const [pathname, search = ''] = moduleLanding.split('?');
+        url.pathname = pathname;
+        url.search = search ? `?${search}` : '';
       } else {
         url.pathname = path === '/register' ? '/app/register' : '/app/login';
       }

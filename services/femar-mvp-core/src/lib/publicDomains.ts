@@ -7,9 +7,11 @@ import {
   MODULE_SUBDOMAINS,
   PRIMARY_ZONE,
   modulePublicUrl,
+  moduleLandingPathForHost,
+  moduleLandingPathForId,
 } from '@/lib/moduleDomains';
 
-export { PRIMARY_ZONE, MODULE_SUBDOMAINS, MODULE_PUBLIC_URLS, MODULE_HOST_ALIASES, modulePublicUrl };
+export { PRIMARY_ZONE, MODULE_SUBDOMAINS, MODULE_PUBLIC_URLS, MODULE_HOST_ALIASES, modulePublicUrl, moduleLandingPathForHost, moduleLandingPathForId };
 
 export const HACKATHON_URLS = {
   portalLogin: MODULE_PUBLIC_URLS.portalLogin,

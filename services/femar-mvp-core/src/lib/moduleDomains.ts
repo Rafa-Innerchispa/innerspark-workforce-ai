@@ -42,6 +42,40 @@ export const MODULE_HOST_ALIASES: Record<string, string> = {
   'www.inneros.iskconguayaquil.org': modulePublicUrl(MODULE_SUBDOMAINS.iskcon, '/app/desk'),
 };
 
+
+/** Canonical in-app landing paths for modules with a real UI in this app. */
+export const MODULE_LANDING_PATHS: Record<string, string> = {
+  'workforce-ai': '/modules',
+  'iskcon-desk': '/app/desk',
+  'inneros-admin': '/app/modules',
+};
+
+const HOST_MODULE_IDS: Record<string, string> = {
+  [`${MODULE_SUBDOMAINS.workforce}.${PRIMARY_ZONE}`]: 'workforce-ai',
+  [`www.${MODULE_SUBDOMAINS.workforce}.${PRIMARY_ZONE}`]: 'workforce-ai',
+  [`${MODULE_SUBDOMAINS.iskcon}.${PRIMARY_ZONE}`]: 'iskcon-desk',
+  [`www.${MODULE_SUBDOMAINS.iskcon}.${PRIMARY_ZONE}`]: 'iskcon-desk',
+  [`${MODULE_SUBDOMAINS.admin}.${PRIMARY_ZONE}`]: 'inneros-admin',
+  [`www.${MODULE_SUBDOMAINS.admin}.${PRIMARY_ZONE}`]: 'inneros-admin',
+  [`${MODULE_SUBDOMAINS.portal}.${PRIMARY_ZONE}`]: 'inneros-admin',
+  [`www.${MODULE_SUBDOMAINS.portal}.${PRIMARY_ZONE}`]: 'inneros-admin',
+};
+
+/** Returns a real landing path only when the module UI exists in this app. */
+export function moduleLandingPathForId(moduleId: string): string | null {
+  return MODULE_LANDING_PATHS[moduleId] || null;
+}
+
+/** Root requests on module hosts should land on a real module/shell route, not /app/login. */
+export function moduleLandingPathForHost(host: string): string | null {
+  const lower = host.toLowerCase();
+  const normalized = lower in MODULE_HOST_ALIASES ? new URL(MODULE_HOST_ALIASES[lower]).hostname : lower;
+  const moduleId = HOST_MODULE_IDS[normalized];
+  if (moduleId) return moduleLandingPathForId(moduleId);
+  if (normalized.endsWith(`.${PRIMARY_ZONE}`)) return '/app/modules';
+  return null;
+}
+
 export const MODULE_PUBLIC_URLS = {
   portalLogin: modulePublicUrl(MODULE_SUBDOMAINS.portal, '/app/login'),
   portalModules: modulePublicUrl(MODULE_SUBDOMAINS.portal, '/app/modules'),

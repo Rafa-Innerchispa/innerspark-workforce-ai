@@ -16,6 +16,10 @@ export async function GET(req: Request, { params }: Params) {
   const user = await requireModuleAccess(moduleId);
   if (user instanceof NextResponse) return user;
 
+  if (mod.status === 'NOT_READY' || !mod.entryUrl) {
+    return NextResponse.json({ ok: false, error: 'Module UI not ready', moduleId, status: mod.status }, { status: 409 });
+  }
+
   const { launchUrl, entryUrl } = buildModuleLaunchUrl(mod, user, req);
   const resolvedEntry = resolveModuleLaunchBase(mod, hostFromRequest(req));
 
