@@ -3,7 +3,7 @@
 <!-- INNEROS-NARRATIVE:START -->
 > **InnerOS role:** Product  
 > **Lifecycle:** Active product development  
-> **Lineage:** Commercial workforce product; hackathons are used to validate selected interfaces and integrations, not to define the product itself.
+> **Lineage:** Commercial workforce product; hackathons validate selected interfaces and integrations but do not define the product.
 >
 > Workforce applies InnerOS-style governed automation to attendance, incidents, reporting, and deterministic pre-payroll workflows.
 >
