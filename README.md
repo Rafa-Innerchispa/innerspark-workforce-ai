@@ -1,5 +1,16 @@
 # InnerSpark Workforce AI
 
+<!-- INNEROS-NARRATIVE:START -->
+> **InnerOS role:** Product  
+> **Lifecycle:** Active product development  
+> **Lineage:** Commercial workforce product; hackathons are used to validate selected interfaces and integrations, not to define the product itself.
+>
+> Workforce applies InnerOS-style governed automation to attendance, incidents, reporting, and deterministic pre-payroll workflows.
+>
+> **InnerOS principle:** hackathons are validation environments. Reusable capabilities are extracted into maintained products and platform layers rather than treated as disconnected one-off projects.
+<!-- INNEROS-NARRATIVE:END -->
+
+
 Plataforma de asistencia y pre-nómina, núcleo (backend) para el hackathon NativeBuilder y producto real para FEMAR.
 
 ## Alcance del MVP
